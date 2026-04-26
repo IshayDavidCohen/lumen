@@ -27,10 +27,10 @@ function HistoryRow({
   const isFailed = entry.status === "FAILED";
 
   let rowStyles =
-    "dark:border-zinc-800 dark:bg-zinc-900/30 light:border-zinc-200 light:bg-white";
+    "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/30";
   if (isFailed) {
     rowStyles =
-      "dark:border-red-500/10 dark:bg-red-500/[0.03] light:border-red-100 light:bg-red-50/50";
+      "border-red-100 bg-red-50/50 dark:border-red-500/10 dark:bg-red-500/[0.03]";
   }
 
   return (
@@ -40,15 +40,15 @@ function HistoryRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span
-            className="truncate font-mono text-sm dark:text-zinc-300 light:text-zinc-700"
+            className="truncate font-mono text-sm text-zinc-700 dark:text-zinc-300"
             title={entry.filename}
           >
             {entry.filename}
           </span>
-          <span className="shrink-0 rounded px-1.5 py-0.5 text-xs font-medium dark:bg-zinc-800 dark:text-zinc-400 light:bg-zinc-100 light:text-zinc-500">
+          <span className="shrink-0 rounded px-1.5 py-0.5 text-xs font-medium bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
             {entry.ingestType}
           </span>
-          <span className="shrink-0 text-xs dark:text-zinc-600 light:text-zinc-400">
+          <span className="shrink-0 text-xs text-zinc-400 dark:text-zinc-600">
             {formatFileSize(entry.fileSize)}
           </span>
         </div>
@@ -60,7 +60,7 @@ function HistoryRow({
       <StatusBadge status={entry.status} />
 
       <span
-        className="shrink-0 text-xs tabular-nums dark:text-zinc-600 light:text-zinc-400"
+        className="shrink-0 text-xs tabular-nums text-zinc-400 dark:text-zinc-600"
         title={new Date(entry.completedAt).toLocaleString()}
       >
         {formatRelativeTime(entry.completedAt)}
@@ -69,8 +69,8 @@ function HistoryRow({
       <button
         onClick={() => onRemove(entry.id)}
         className="shrink-0 rounded-full p-1 opacity-0 transition-all duration-150 group-hover:opacity-100
-                   dark:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300
-                   light:text-zinc-400 light:hover:bg-zinc-100 light:hover:text-zinc-700"
+                   text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700
+                   dark:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
         title="Remove from history"
       >
         <X size={14} />
@@ -84,7 +84,7 @@ export function IngestHistory() {
 
   if (entries.length === 0) {
     return (
-      <p className="py-6 text-center text-sm dark:text-zinc-600 light:text-zinc-400">
+      <p className="py-6 text-center text-sm text-zinc-400 dark:text-zinc-600">
         No upload history yet
       </p>
     );
@@ -93,14 +93,14 @@ export function IngestHistory() {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium dark:text-zinc-400 light:text-zinc-600">
+        <h2 className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
           History
         </h2>
         <button
           onClick={clearAll}
           className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors duration-150
-                     dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300
-                     light:text-zinc-400 light:hover:bg-zinc-100 light:hover:text-zinc-700"
+                     text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700
+                     dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
         >
           <Trash2 size={12} />
           Clear history

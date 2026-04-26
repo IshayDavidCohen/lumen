@@ -1,7 +1,6 @@
 @import "tailwindcss";
 
 @custom-variant dark (&:where(.dark, .dark *));
-@custom-variant light (&:where(.light, .light *));
 
 @font-face {
   font-family: "Geist";
@@ -59,18 +58,15 @@
 
 html {
   font-family: var(--font-sans);
+  color-scheme: light;
 }
 
 html.dark {
   color-scheme: dark;
 }
 
-html.light {
-  color-scheme: light;
-}
-
-html.light body {
-  @apply bg-zinc-50 text-zinc-900;
+html.dark body {
+  @apply bg-zinc-950 text-zinc-100;
 }
 
 @keyframes check-pop {

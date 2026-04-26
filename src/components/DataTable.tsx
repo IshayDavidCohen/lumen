@@ -166,15 +166,15 @@ export function DataTable({
     <div className="flex flex-col gap-2">
       {/* Toolbar */}
       <div className="flex items-center justify-between">
-        <span className="text-xs font-mono dark:text-zinc-500 light:text-zinc-400">
+        <span className="text-xs font-mono text-zinc-400 dark:text-zinc-500">
           {total.toLocaleString()} row{total !== 1 ? "s" : ""}
         </span>
         <button
           onClick={() => exportToCsv(apiColumns, rows)}
           disabled={rows.length === 0}
           className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors duration-150
+                     text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700
                      dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200
-                     light:text-zinc-500 light:hover:bg-zinc-100 light:hover:text-zinc-700
                      disabled:opacity-40 disabled:pointer-events-none"
         >
           <Download size={12} />
@@ -183,12 +183,12 @@ export function DataTable({
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-lg border dark:border-zinc-800 light:border-zinc-200">
+        <div className="overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
         <div ref={parentRef} className="max-h-[600px] overflow-auto">
           <table className="w-full border-collapse text-sm">
             <thead className="sticky top-0 z-10">
               {getHeaderGroups().map((hg) => (
-                <tr key={hg.id} className="dark:bg-zinc-900 light:bg-zinc-50">
+                <tr key={hg.id} className="bg-zinc-50 dark:bg-zinc-900">
                   {hg.headers.map((header) => {
                     const meta = header.column.columnDef.meta as
                       | { colType: Column["type"]; nullablePct: number }
@@ -201,8 +201,8 @@ export function DataTable({
                       <th
                         key={header.id}
                         className="border-b px-3 py-2 text-left font-medium
-                                   dark:border-zinc-800 dark:text-zinc-400
-                                   light:border-zinc-200 light:text-zinc-600"
+                                   border-zinc-200 text-zinc-600
+                                   dark:border-zinc-800 dark:text-zinc-400"
                       >
                         <button
                           onClick={() => handleSort(header.id)}
@@ -236,8 +236,8 @@ export function DataTable({
                 Array.from({ length: 10 }).map((_, i) => (
                   <tr key={`skel-${i}`}>
                     {apiColumns.map((col) => (
-                      <td key={col.name} className="border-b px-3 py-2 dark:border-zinc-800/50 light:border-zinc-100">
-                        <div className="h-4 w-20 animate-pulse rounded dark:bg-zinc-800 light:bg-zinc-200" />
+                      <td key={col.name} className="border-b px-3 py-2 border-zinc-100 dark:border-zinc-800/50">
+                        <div className="h-4 w-20 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
                       </td>
                     ))}
                   </tr>
@@ -246,7 +246,7 @@ export function DataTable({
                 <tr>
                   <td
                     colSpan={apiColumns.length}
-                    className="px-3 py-12 text-center text-sm dark:text-zinc-600 light:text-zinc-400"
+                    className="px-3 py-12 text-center text-sm text-zinc-400 dark:text-zinc-600"
                   >
                     No data
                   </td>
@@ -268,7 +268,7 @@ export function DataTable({
                         key={row.id}
                         ref={virtualizer.measureElement}
                         data-index={vRow.index}
-                        className="dark:hover:bg-zinc-800/50 light:hover:bg-zinc-50 transition-colors duration-75"
+                        className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors duration-75"
                       >
                         {row.getVisibleCells().map((cell) => {
                           const meta = cell.column.columnDef.meta as
@@ -284,10 +284,10 @@ export function DataTable({
                               key={cell.id}
                               className={`
                                 border-b px-3 py-1.5 truncate max-w-[300px]
-                                dark:border-zinc-800/50 light:border-zinc-100
+                                border-zinc-100 dark:border-zinc-800/50
                                 ${isMono ? "font-mono" : ""}
                                 ${isNum ? "text-right" : ""}
-                                ${isNull ? "dark:text-zinc-700 light:text-zinc-300 italic" : "dark:text-zinc-300 light:text-zinc-700"}
+                                ${isNull ? "text-zinc-300 dark:text-zinc-700 italic" : "text-zinc-700 dark:text-zinc-300"}
                               `.trim()}
                               title={String(val ?? "")}
                             >
@@ -320,13 +320,13 @@ export function DataTable({
       {/* Pagination */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-xs dark:text-zinc-500 light:text-zinc-400">Rows per page</span>
+          <span className="text-xs text-zinc-400 dark:text-zinc-500">Rows per page</span>
           <select
             value={pageSize}
             onChange={(e) => onPageSizeChange(Number(e.target.value))}
             className="h-7 rounded border px-1.5 text-xs
-                       dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300
-                       light:border-zinc-300 light:bg-white light:text-zinc-700"
+                       border-zinc-300 bg-white text-zinc-700
+                       dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
           >
             {PAGE_SIZES.map((s) => (
               <option key={s} value={s}>{s}</option>
@@ -335,7 +335,7 @@ export function DataTable({
         </div>
 
         <div className="flex items-center gap-1">
-          <span className="mr-2 text-xs font-mono dark:text-zinc-500 light:text-zinc-400">
+          <span className="mr-2 text-xs font-mono text-zinc-400 dark:text-zinc-500">
             Page {page} of {totalPages || 1}
           </span>
           <PagBtn onClick={() => onPageChange(1)} disabled={page <= 1}>
@@ -371,8 +371,8 @@ function PagBtn({
       disabled={disabled}
       className="flex h-7 w-7 items-center justify-center rounded
                  transition-colors duration-150
+                 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700
                  dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200
-                 light:text-zinc-500 light:hover:bg-zinc-100 light:hover:text-zinc-700
                  disabled:opacity-30 disabled:pointer-events-none"
     >
       {children}

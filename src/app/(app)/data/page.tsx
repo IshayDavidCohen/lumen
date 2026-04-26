@@ -22,14 +22,14 @@ export default function DataPage() {
 
   const { data: typesData } = useQuery({
     queryKey: ["datasetTypes"],
-    queryFn: getDatasetTypes,
+    queryFn: ({ signal }) => getDatasetTypes(signal),
   });
 
   const selectedType = type ?? typesData?.types[0] ?? null;
 
   const { data: tablesData, isLoading: tablesLoading } = useQuery({
     queryKey: ["tables", selectedType],
-    queryFn: () => getTables(selectedType!),
+    queryFn: ({ signal }) => getTables(selectedType!, signal),
     enabled: !!selectedType,
   });
 
@@ -37,7 +37,7 @@ export default function DataPage() {
 
   const { data: tableData, isLoading: dataLoading } = useQuery({
     queryKey: ["tableData", selectedType, selectedTable, page, pageSize, sorting],
-    queryFn: () =>
+    queryFn: ({ signal }) =>
       getTableData({
         type: selectedType!,
         name: selectedTable!,
@@ -45,6 +45,7 @@ export default function DataPage() {
         pageSize,
         sortBy: sorting?.id,
         sortDir: sorting ? (sorting.desc ? "desc" : "asc") : undefined,
+        signal,
       }),
     enabled: !!selectedType && !!selectedTable,
   });
@@ -88,7 +89,7 @@ export default function DataPage() {
   if (!selectedType && types.length === 0) {
     return (
       <div className="flex h-[calc(100vh-56px)] items-center justify-center">
-        <p className="text-sm dark:text-zinc-500 light:text-zinc-400">
+        <p className="text-sm text-zinc-400 dark:text-zinc-500">
           No datasets available. Upload files on the Ingest page.
         </p>
       </div>
@@ -100,18 +101,18 @@ export default function DataPage() {
       {/* Sidebar */}
       <aside
         className="flex w-60 shrink-0 flex-col border-r overflow-y-auto
-                    dark:border-zinc-800 dark:bg-zinc-950
-                    light:border-zinc-200 light:bg-zinc-50"
+                    border-zinc-200 bg-zinc-50
+                    dark:border-zinc-800 dark:bg-zinc-950"
       >
         {/* Type selector */}
         {types.length > 1 && (
-          <div className="border-b px-3 py-2 dark:border-zinc-800 light:border-zinc-200">
+          <div className="border-b px-3 py-2 border-zinc-200 dark:border-zinc-800">
             <select
               value={selectedType ?? ""}
               onChange={(e) => handleTypeSelect(e.target.value)}
               className="w-full rounded-md border px-2 py-1.5 text-xs font-medium
-                         dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300
-                         light:border-zinc-300 light:bg-white light:text-zinc-700"
+                         border-zinc-300 bg-white text-zinc-700
+                         dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
             >
               {types.map((t) => (
                 <option key={t} value={t}>{t}</option>
@@ -121,9 +122,9 @@ export default function DataPage() {
         )}
 
         {types.length === 1 && (
-          <div className="flex items-center gap-2 border-b px-4 py-3 dark:border-zinc-800 light:border-zinc-200">
-            <Database size={14} className="dark:text-zinc-500 light:text-zinc-400" />
-            <span className="text-xs font-semibold uppercase tracking-wider dark:text-zinc-500 light:text-zinc-400">
+          <div className="flex items-center gap-2 border-b px-4 py-3 border-zinc-200 dark:border-zinc-800">
+            <Database size={14} className="text-zinc-400 dark:text-zinc-500" />
+            <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
               {selectedType}
             </span>
           </div>
@@ -133,7 +134,7 @@ export default function DataPage() {
         <nav className="flex-1 py-1">
           {tablesLoading
             ? Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="mx-3 my-1.5 h-8 animate-pulse rounded dark:bg-zinc-800 light:bg-zinc-200" />
+                <div key={i} className="mx-3 my-1.5 h-8 animate-pulse rounded bg-zinc-200 dark:bg-zinc-800" />
               ))
             : tables.map((t: TableInfo) => {
                 const isActive = t.name === selectedTable;
@@ -146,8 +147,8 @@ export default function DataPage() {
                       transition-colors duration-100
                       ${
                         isActive
-                          ? "dark:bg-zinc-800 dark:text-zinc-100 light:bg-blue-50 light:text-blue-700"
-                          : "dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200 light:text-zinc-600 light:hover:bg-zinc-100 light:hover:text-zinc-900"
+                          ? "bg-blue-50 text-blue-700 dark:bg-zinc-800 dark:text-zinc-100"
+                          : "text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
                       }
                     `.trim()}
                   >
@@ -167,9 +168,9 @@ export default function DataPage() {
         {selectedTable && tableInfo ? (
           <div className="flex h-full flex-col">
             <div className="mb-4 flex items-center gap-2">
-              <span className="text-xs dark:text-zinc-500 light:text-zinc-400">{selectedType}</span>
-              <ChevronRight size={12} className="dark:text-zinc-700 light:text-zinc-300" />
-              <h1 className="font-mono text-sm font-semibold dark:text-zinc-200 light:text-zinc-800">
+              <span className="text-xs text-zinc-400 dark:text-zinc-500">{selectedType}</span>
+              <ChevronRight size={12} className="text-zinc-300 dark:text-zinc-700" />
+              <h1 className="font-mono text-sm font-semibold text-zinc-800 dark:text-zinc-200">
                 {selectedTable}
               </h1>
             </div>
@@ -190,7 +191,7 @@ export default function DataPage() {
           </div>
         ) : (
           <div className="flex h-full items-center justify-center">
-            <p className="text-sm dark:text-zinc-600 light:text-zinc-400">
+            <p className="text-sm text-zinc-400 dark:text-zinc-600">
               Select a table from the sidebar
             </p>
           </div>

@@ -5,7 +5,7 @@ import { ToastProvider } from "./ui/Toast";
 export function AppShell() {
   return (
     <ToastProvider>
-      <div className="flex min-h-screen flex-col dark:bg-zinc-950 light:bg-zinc-50">
+      <div className="flex min-h-screen flex-col bg-zinc-50 dark:bg-zinc-950">
         <NavBar />
         <main className="flex-1">
           <Outlet />

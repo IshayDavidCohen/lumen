@@ -16,13 +16,13 @@ export function NavBar() {
     <header
       className="
         flex h-14 items-center border-b px-6
+        border-zinc-200 bg-white
         dark:border-zinc-800 dark:bg-zinc-950
-        light:border-zinc-200 light:bg-white
       "
     >
       <NavLink
         to="/"
-        className="mr-8 text-base font-semibold tracking-tight dark:text-zinc-100 light:text-zinc-900"
+        className="mr-8 text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100"
       >
         Lumen
       </NavLink>
@@ -38,8 +38,8 @@ export function NavBar() {
               transition-colors duration-150 rounded-md
               ${
                 isActive
-                  ? "dark:text-zinc-100 dark:bg-zinc-800/80 light:text-zinc-900 light:bg-zinc-100"
-                  : "dark:text-zinc-500 dark:hover:text-zinc-300 dark:hover:bg-zinc-800/40 light:text-zinc-500 light:hover:text-zinc-700 light:hover:bg-zinc-100"
+                  ? "text-zinc-900 bg-zinc-100 dark:text-zinc-100 dark:bg-zinc-800/80"
+                  : "text-zinc-500 hover:text-zinc-700 hover:bg-zinc-100 dark:text-zinc-500 dark:hover:text-zinc-300 dark:hover:bg-zinc-800/40"
               }
             `.trim()
             }
@@ -62,8 +62,8 @@ export function NavBar() {
           className="
             flex h-8 w-8 items-center justify-center rounded-full
             transition-colors duration-150
+            text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700
             dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300
-            light:text-zinc-400 light:hover:bg-zinc-100 light:hover:text-zinc-700
           "
           aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
           title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}

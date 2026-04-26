@@ -19,18 +19,20 @@ export async function uploadFile(
   file: File,
   ingestType: string,
   onProgress?: (progress: number) => void,
+  signal?: AbortSignal,
 ): Promise<UploadResponse> {
   if (USE_MOCK) return mockUploadFile(file, ingestType, onProgress);
 
   const formData = new FormData();
   formData.append("file", file);
-  return apiUpload<UploadResponse>(`/ingest/${ingestType}`, formData, onProgress);
+  return apiUpload<UploadResponse>(`/ingest/${ingestType}`, formData, onProgress, signal);
 }
 
 export async function uploadBatch(
   files: File[],
   ingestType: string,
   onProgress?: (progress: number) => void,
+  signal?: AbortSignal,
 ): Promise<BatchUploadResponse> {
   const formData = new FormData();
   for (const file of files) {
@@ -40,17 +42,23 @@ export async function uploadBatch(
     `/ingest/${ingestType}/batch`,
     formData,
     onProgress,
+    signal,
   );
 }
 
-export async function getDatasetTypes(): Promise<DatasetTypesResponse> {
+export async function getDatasetTypes(
+  signal?: AbortSignal,
+): Promise<DatasetTypesResponse> {
   if (USE_MOCK) return mockGetDatasetTypes();
-  return apiGet<DatasetTypesResponse>("/datasets/types");
+  return apiGet<DatasetTypesResponse>("/datasets/types", signal);
 }
 
-export async function getTables(type: string): Promise<TablesResponse> {
+export async function getTables(
+  type: string,
+  signal?: AbortSignal,
+): Promise<TablesResponse> {
   if (USE_MOCK) return mockGetTables(type);
-  return apiGet<TablesResponse>(`/datasets/${type}/tables`);
+  return apiGet<TablesResponse>(`/datasets/${type}/tables`, signal);
 }
 
 export interface TableDataParams {
@@ -61,6 +69,7 @@ export interface TableDataParams {
   sortBy?: string;
   sortDir?: "asc" | "desc";
   filters?: Record<string, string>;
+  signal?: AbortSignal;
 }
 
 export async function getTableData(
@@ -87,5 +96,5 @@ export async function getTableData(
 
   const query = searchParams.toString();
   const path = `/datasets/${params.type}/tables/${params.name}${query ? `?${query}` : ""}`;
-  return apiGet<TableDataResponse>(path);
+  return apiGet<TableDataResponse>(path, params.signal);
 }

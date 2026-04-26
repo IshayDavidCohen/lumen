@@ -10,35 +10,35 @@ interface StatusBadgeProps {
 const STATUS_STYLES: Record<ExtendedStatus, { label: string; classes: string }> = {
   PENDING: {
     label: "Pending",
-    classes: "dark:bg-zinc-500/10 dark:text-zinc-400 light:bg-zinc-100 light:text-zinc-600",
+    classes: "bg-zinc-100 text-zinc-600 dark:bg-zinc-500/10 dark:text-zinc-400",
   },
   UPLOADING: {
     label: "Uploading",
-    classes: "dark:bg-blue-500/10 dark:text-blue-400 light:bg-blue-50 light:text-blue-700",
+    classes: "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400",
   },
   UPLOADED: {
     label: "Uploaded",
-    classes: "dark:bg-blue-500/10 dark:text-blue-400 light:bg-blue-50 light:text-blue-700",
+    classes: "bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400",
   },
   QUEUED: {
     label: "Queued",
-    classes: "dark:bg-amber-500/10 dark:text-amber-400 light:bg-amber-50 light:text-amber-700",
+    classes: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
   },
   PROCESSING: {
     label: "Processing",
-    classes: "dark:bg-teal-500/10 dark:text-teal-400 light:bg-teal-50 light:text-teal-700",
+    classes: "bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-400",
   },
   PARSED: {
     label: "Parsed",
-    classes: "dark:bg-green-500/10 dark:text-green-400 light:bg-green-50 light:text-green-700",
+    classes: "bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400",
   },
   FAILED: {
     label: "Failed",
-    classes: "dark:bg-red-500/10 dark:text-red-400 light:bg-red-50 light:text-red-700",
+    classes: "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400",
   },
   REJECTED: {
     label: "Rejected",
-    classes: "dark:bg-red-500/10 dark:text-red-400 light:bg-red-50 light:text-red-700",
+    classes: "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400",
   },
 };
 

@@ -36,12 +36,21 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
+export async function apiGet<T>(
+  path: string,
+  signal?: AbortSignal,
+): Promise<T> {
   try {
-    const response = await fetch(`${BASE_URL}${path}`);
+    const response = await fetch(`${BASE_URL}${path}`, { signal });
     return handleResponse<T>(response);
   } catch (error) {
     if (error instanceof ApiError) throw error;
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError({
+        code: "NETWORK_ERROR",
+        message: "Request was cancelled",
+      });
+    }
     throw new ApiError({
       code: "NETWORK_ERROR",
       message: "Unable to connect to the server",
@@ -53,16 +62,24 @@ export async function apiGet<T>(path: string): Promise<T> {
 export async function apiPost<T>(
   path: string,
   body: unknown,
+  signal?: AbortSignal,
 ): Promise<T> {
   try {
     const response = await fetch(`${BASE_URL}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal,
     });
     return handleResponse<T>(response);
   } catch (error) {
     if (error instanceof ApiError) throw error;
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError({
+        code: "NETWORK_ERROR",
+        message: "Request was cancelled",
+      });
+    }
     throw new ApiError({
       code: "NETWORK_ERROR",
       message: "Unable to connect to the server",
@@ -75,19 +92,27 @@ export async function apiUpload<T>(
   path: string,
   formData: FormData,
   onProgress?: (progress: number) => void,
+  signal?: AbortSignal,
 ): Promise<T> {
   try {
     if (onProgress) {
-      return await uploadWithProgress<T>(path, formData, onProgress);
+      return await uploadWithProgress<T>(path, formData, onProgress, signal);
     }
 
     const response = await fetch(`${BASE_URL}${path}`, {
       method: "POST",
       body: formData,
+      signal,
     });
     return handleResponse<T>(response);
   } catch (error) {
     if (error instanceof ApiError) throw error;
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError({
+        code: "UPLOAD_FAILED",
+        message: "Request was cancelled",
+      });
+    }
     throw new ApiError({
       code: "UPLOAD_FAILED",
       message: "File upload failed",
@@ -100,10 +125,25 @@ function uploadWithProgress<T>(
   path: string,
   formData: FormData,
   onProgress: (progress: number) => void,
+  signal?: AbortSignal,
 ): Promise<T> {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(
+        new ApiError({
+          code: "UPLOAD_FAILED",
+          message: "Request was cancelled",
+        }),
+      );
+      return;
+    }
+
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${BASE_URL}${path}`);
+
+    if (signal) {
+      signal.addEventListener("abort", () => xhr.abort());
+    }
 
     xhr.upload.addEventListener("progress", (event) => {
       if (event.lengthComputable) {
@@ -155,7 +195,7 @@ function uploadWithProgress<T>(
       reject(
         new ApiError({
           code: "UPLOAD_FAILED",
-          message: "Upload was cancelled",
+          message: "Request was cancelled",
         }),
       );
     });

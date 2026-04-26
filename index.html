@@ -1,11 +1,17 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Lumen</title>
+    <script>
+      (function() {
+        var t = localStorage.getItem("lumen-theme");
+        if (t === "dark") document.documentElement.classList.add("dark");
+      })();
+    </script>
   </head>
-  <body class="bg-zinc-950 text-zinc-100 antialiased">
+  <body class="bg-zinc-50 text-zinc-900 antialiased">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

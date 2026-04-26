@@ -30,26 +30,26 @@ const VARIANT_CONFIG: Record<
   info: {
     icon: Info,
     classes:
-      "dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 light:border-zinc-200 light:bg-white light:text-zinc-900 light:shadow-sm",
-    iconClass: "dark:text-blue-400 light:text-blue-600",
+      "border-zinc-200 bg-white text-zinc-900 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100",
+    iconClass: "text-blue-600 dark:text-blue-400",
   },
   success: {
     icon: CheckCircle2,
     classes:
-      "dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-100 light:border-green-200 light:bg-green-50 light:text-green-900 light:shadow-sm",
-    iconClass: "dark:text-green-400 light:text-green-600",
+      "border-green-200 bg-green-50 text-green-900 shadow-sm dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-100",
+    iconClass: "text-green-600 dark:text-green-400",
   },
   warning: {
     icon: AlertTriangle,
     classes:
-      "dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100 light:border-amber-200 light:bg-amber-50 light:text-amber-900 light:shadow-sm",
-    iconClass: "dark:text-amber-400 light:text-amber-600",
+      "border-amber-200 bg-amber-50 text-amber-900 shadow-sm dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100",
+    iconClass: "text-amber-600 dark:text-amber-400",
   },
   error: {
     icon: AlertCircle,
     classes:
-      "dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100 light:border-red-200 light:bg-red-50 light:text-red-900 light:shadow-sm",
-    iconClass: "dark:text-red-400 light:text-red-600",
+      "border-red-200 bg-red-50 text-red-900 shadow-sm dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100",
+    iconClass: "text-red-600 dark:text-red-400",
   },
 };
 
@@ -95,7 +95,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               </ToastPrimitive.Description>
               <ToastPrimitive.Close
                 className="shrink-0 rounded-full p-1 transition-colors duration-150
-                           dark:hover:bg-white/10 light:hover:bg-zinc-200"
+                           hover:bg-zinc-200 dark:hover:bg-white/10"
                 aria-label="Close"
               >
                 <X size={14} />

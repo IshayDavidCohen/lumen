@@ -15,13 +15,13 @@ const variantClasses: Record<ButtonVariant, string> = {
   `,
   ghost: `
     bg-transparent
+    text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 active:bg-zinc-200
     dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200 dark:active:bg-zinc-700
-    light:text-zinc-600 light:hover:bg-zinc-100 light:hover:text-zinc-900 light:active:bg-zinc-200
     disabled:opacity-50 disabled:pointer-events-none
   `,
   danger: `
+    bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700
     dark:bg-red-600/10 dark:text-red-400 dark:hover:bg-red-600/20 dark:hover:text-red-300
-    light:bg-red-50 light:text-red-600 light:hover:bg-red-100 light:hover:text-red-700
     disabled:opacity-50 disabled:pointer-events-none
   `,
 };

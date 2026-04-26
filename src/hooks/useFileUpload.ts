@@ -56,6 +56,7 @@ export function useFileUpload() {
   const { files, addFiles, updateFile, removeFile, clearCompleted, reset } =
     useFileUploadStore();
   const wsConnections = useRef<Map<string, WebSocketConnection>>(new Map());
+  const uploadControllers = useRef<Map<string, AbortController>>(new Map());
 
   const persistToHistory = useCallback((tracked: TrackedFile, errorMsg?: string | null) => {
     useIngestHistoryStore.getState().addEntry({
@@ -112,6 +113,12 @@ export function useFileUpload() {
 
   const uploadSingleFile = useCallback(
     async (trackedFile: TrackedFile) => {
+      const existingCtrl = uploadControllers.current.get(trackedFile.id);
+      if (existingCtrl) existingCtrl.abort();
+
+      const controller = new AbortController();
+      uploadControllers.current.set(trackedFile.id, controller);
+
       updateFile(trackedFile.id, {
         status: "UPLOADING",
         progress: 0,
@@ -120,18 +127,25 @@ export function useFileUpload() {
       });
 
       try {
-        const response = await uploadFile(trackedFile.file, trackedFile.ingestType, (progress) => {
-          const now = Date.now();
-          const elapsed = trackedFile.startedAt
-            ? (now - trackedFile.startedAt) / 1000
-            : 0;
-          const speed =
-            elapsed > 0
-              ? (trackedFile.file.size * (progress / 100)) / elapsed
-              : null;
+        const response = await uploadFile(
+          trackedFile.file,
+          trackedFile.ingestType,
+          (progress) => {
+            const now = Date.now();
+            const elapsed = trackedFile.startedAt
+              ? (now - trackedFile.startedAt) / 1000
+              : 0;
+            const speed =
+              elapsed > 0
+                ? (trackedFile.file.size * (progress / 100)) / elapsed
+                : null;
 
-          updateFile(trackedFile.id, { progress, speed });
-        });
+            updateFile(trackedFile.id, { progress, speed });
+          },
+          controller.signal,
+        );
+
+        uploadControllers.current.delete(trackedFile.id);
 
         updateFile(trackedFile.id, {
           status: response.status,
@@ -141,6 +155,12 @@ export function useFileUpload() {
 
         subscribeToStatus(trackedFile.id, response.job_id);
       } catch (err) {
+        uploadControllers.current.delete(trackedFile.id);
+
+        if (err instanceof ApiError && err.message === "Request was cancelled") {
+          return;
+        }
+
         const message =
           err instanceof ApiError ? err.message : "Upload failed";
 
@@ -219,6 +239,12 @@ export function useFileUpload() {
       const file = files.find((f) => f.id === fileId);
       if (!file || file.status !== "FAILED") return;
 
+      const existingCtrl = uploadControllers.current.get(fileId);
+      if (existingCtrl) {
+        existingCtrl.abort();
+        uploadControllers.current.delete(fileId);
+      }
+
       updateFile(fileId, {
         status: "PENDING",
         progress: 0,
@@ -238,6 +264,11 @@ export function useFileUpload() {
 
   const removeTrackedFile = useCallback(
     (fileId: string) => {
+      const ctrl = uploadControllers.current.get(fileId);
+      if (ctrl) {
+        ctrl.abort();
+        uploadControllers.current.delete(fileId);
+      }
       const conn = wsConnections.current.get(fileId);
       if (conn) {
         conn.close();

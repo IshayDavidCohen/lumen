@@ -21,7 +21,7 @@ function ProgressBar({
   const isAnimating = status === "UPLOADING" || status === "PROCESSING";
 
   return (
-    <div className="h-1 w-full overflow-hidden rounded-full dark:bg-zinc-800 light:bg-zinc-200">
+    <div className="h-1 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
       <div
         className={`h-full rounded-full transition-all duration-300 ease-out ${colorClass} ${
           isAnimating ? "animate-progress-pulse" : ""
@@ -59,13 +59,13 @@ function FileRow({
   }, [tracked.speed, tracked.progress, tracked.file.size]);
 
   let rowStyles =
-    "dark:border-zinc-800 dark:bg-zinc-900/50 light:border-zinc-200 light:bg-white";
+    "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/50";
   if (isFailed) {
     rowStyles =
-      "dark:border-red-500/20 dark:bg-red-500/5 light:border-red-200 light:bg-red-50";
+      "border-red-200 bg-red-50 dark:border-red-500/20 dark:bg-red-500/5";
   } else if (isParsed) {
     rowStyles =
-      "dark:border-green-500/10 dark:bg-green-500/5 light:border-green-100 light:bg-green-50";
+      "border-green-100 bg-green-50 dark:border-green-500/10 dark:bg-green-500/5";
   }
 
   return (
@@ -79,23 +79,23 @@ function FileRow({
             ? "text-red-400"
             : isParsed
               ? "text-green-400"
-              : "dark:text-zinc-500 light:text-zinc-400"
+              : "text-zinc-400 dark:text-zinc-500"
         }`}
       />
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span
-            className="truncate font-mono text-sm dark:text-zinc-200 light:text-zinc-800"
+            className="truncate font-mono text-sm text-zinc-800 dark:text-zinc-200"
             title={tracked.file.name}
           >
             {tracked.file.name}
           </span>
-          <span className="shrink-0 text-xs dark:text-zinc-500 light:text-zinc-400">
+          <span className="shrink-0 text-xs text-zinc-400 dark:text-zinc-500">
             {formatFileSize(tracked.file.size)}
           </span>
           {eta && isActive && (
-            <span className="shrink-0 font-mono text-xs dark:text-zinc-600 light:text-zinc-400">
+            <span className="shrink-0 font-mono text-xs text-zinc-400 dark:text-zinc-600">
               ~{eta}
             </span>
           )}
@@ -119,8 +119,8 @@ function FileRow({
           <button
             onClick={() => onRetry(tracked.id)}
             className="rounded-full p-1.5 transition-colors duration-150
-                       dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-200
-                       light:text-zinc-400 light:hover:bg-zinc-100 light:hover:text-zinc-700"
+                       text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700
+                       dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
             title="Retry upload"
           >
             <RotateCcw size={14} />
@@ -129,8 +129,8 @@ function FileRow({
         <button
           onClick={() => onRemove(tracked.id)}
           className="rounded-full p-1.5 opacity-0 transition-all duration-150 group-hover:opacity-100
-                     dark:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300
-                     light:text-zinc-400 light:hover:bg-zinc-100 light:hover:text-zinc-700"
+                     text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700
+                     dark:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
           title="Remove file"
         >
           <X size={14} />
@@ -184,8 +184,8 @@ export function FileUpload({ ingestType }: FileUploadProps) {
           rounded-xl border-2 border-dashed transition-all duration-200 ease-out
           ${
             isDragActive
-              ? "scale-[1.01] border-blue-500 dark:bg-blue-500/5 light:bg-blue-50"
-              : "dark:border-zinc-700 dark:bg-zinc-900/30 dark:hover:border-zinc-600 dark:hover:bg-zinc-900/50 light:border-zinc-300 light:bg-zinc-50 light:hover:border-zinc-400 light:hover:bg-zinc-100"
+              ? "scale-[1.01] border-blue-500 bg-blue-50 dark:bg-blue-500/5"
+              : "border-zinc-300 bg-zinc-50 hover:border-zinc-400 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900/30 dark:hover:border-zinc-600 dark:hover:bg-zinc-900/50"
           }
         `.trim()}
       >
@@ -194,18 +194,18 @@ export function FileUpload({ ingestType }: FileUploadProps) {
           className={`mb-4 rounded-full p-4 transition-colors duration-200 ${
             isDragActive
               ? "bg-blue-500/10 text-blue-400"
-              : "dark:bg-zinc-800 dark:text-zinc-500 light:bg-zinc-200 light:text-zinc-400"
+              : "bg-zinc-200 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500"
           }`}
         >
           <Upload size={32} />
         </div>
-        <p className="text-base font-medium dark:text-zinc-300 light:text-zinc-700">
+        <p className="text-base font-medium text-zinc-700 dark:text-zinc-300">
           {isDragActive ? "Drop files here" : "Drop files to upload"}
         </p>
-        <p className="mt-1.5 text-sm dark:text-zinc-500 light:text-zinc-400">
+        <p className="mt-1.5 text-sm text-zinc-400 dark:text-zinc-500">
           or click to browse
         </p>
-        <p className="mt-4 font-mono text-xs dark:text-zinc-600 light:text-zinc-400">
+        <p className="mt-4 font-mono text-xs text-zinc-400 dark:text-zinc-600">
           {ALLOWED_EXTENSIONS.join("  ·  ")}
         </p>
       </div>
@@ -221,23 +221,23 @@ export function FileUpload({ ingestType }: FileUploadProps) {
           px-6 py-4 transition-all duration-200
           ${
             isDragActive
-              ? "border-blue-500 dark:bg-blue-500/5 light:bg-blue-50"
-              : "dark:border-zinc-800 dark:bg-zinc-900/20 dark:hover:border-zinc-700 light:border-zinc-300 light:bg-zinc-50 light:hover:border-zinc-400"
+              ? "border-blue-500 bg-blue-50 dark:bg-blue-500/5"
+              : "border-zinc-300 bg-zinc-50 hover:border-zinc-400 dark:border-zinc-800 dark:bg-zinc-900/20 dark:hover:border-zinc-700"
           }
         `.trim()}
       >
         <input {...getInputProps()} />
         <Upload
           size={16}
-          className={`mr-2 ${isDragActive ? "text-blue-400" : "dark:text-zinc-500 light:text-zinc-400"}`}
+          className={`mr-2 ${isDragActive ? "text-blue-400" : "text-zinc-400 dark:text-zinc-500"}`}
         />
-        <span className="text-sm dark:text-zinc-400 light:text-zinc-500">
+        <span className="text-sm text-zinc-500 dark:text-zinc-400">
           {isDragActive ? "Drop more files here" : "Add more files"}
         </span>
       </div>
 
       <div className="flex items-center justify-between">
-        <p className="text-sm dark:text-zinc-400 light:text-zinc-500">
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
           {files.length} file{files.length !== 1 ? "s" : ""}
           {completedCount > 0 && (
             <span className="text-green-500">
@@ -251,8 +251,8 @@ export function FileUpload({ ingestType }: FileUploadProps) {
             onClick={clearCompleted}
             className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs
                        transition-colors duration-150
-                       dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300
-                       light:text-zinc-400 light:hover:bg-zinc-100 light:hover:text-zinc-700"
+                       text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700
+                       dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300"
           >
             <Trash2 size={12} />
             Clear completed

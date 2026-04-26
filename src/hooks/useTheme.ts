@@ -9,22 +9,18 @@ interface ThemeState {
 }
 
 function getInitialTheme(): Theme {
-  if (typeof window === "undefined") return "dark";
+  if (typeof window === "undefined") return "light";
   const stored = localStorage.getItem("lumen-theme") as Theme | null;
   if (stored === "light" || stored === "dark") return stored;
-  return "dark";
+  return "light";
 }
 
 function applyTheme(theme: Theme) {
   const root = document.documentElement;
-  root.classList.remove("dark", "light");
-  root.classList.add(theme);
-
+  root.classList.remove("dark");
   if (theme === "dark") {
-    document.body.style.backgroundColor = "";
-    document.body.style.color = "";
+    root.classList.add("dark");
   }
-
   localStorage.setItem("lumen-theme", theme);
 }
 

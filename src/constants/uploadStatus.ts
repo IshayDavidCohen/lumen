@@ -57,34 +57,3 @@ export const TERMINAL_STATUSES: UploadStatus[] = ["PARSED", "FAILED"];
 export function isTerminalStatus(status: UploadStatus): boolean {
   return TERMINAL_STATUSES.includes(status);
 }
-
-export const STATUS_CONFIG_LIGHT: Record<
-  UploadStatus,
-  { bgClass: string; textClass: string; borderClass: string }
-> = {
-  UPLOADED: {
-    bgClass: "bg-blue-50",
-    textClass: "text-blue-700",
-    borderClass: "border-blue-200",
-  },
-  QUEUED: {
-    bgClass: "bg-amber-50",
-    textClass: "text-amber-700",
-    borderClass: "border-amber-200",
-  },
-  PROCESSING: {
-    bgClass: "bg-teal-50",
-    textClass: "text-teal-700",
-    borderClass: "border-teal-200",
-  },
-  PARSED: {
-    bgClass: "bg-green-50",
-    textClass: "text-green-700",
-    borderClass: "border-green-200",
-  },
-  FAILED: {
-    bgClass: "bg-red-50",
-    textClass: "text-red-700",
-    borderClass: "border-red-200",
-  },
-};
