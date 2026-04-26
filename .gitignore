@@ -4,3 +4,7 @@ dist/
 *.local
 .vite/
 *.tsbuildinfo
+
+*.mdc
+architecture.md
+lumen-cursor-fixes.md
