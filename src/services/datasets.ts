@@ -2,6 +2,8 @@ import { apiGet, apiUpload } from "./api";
 import {
   mockUploadFile,
   mockGetDatasetTypes,
+  mockGetTables,
+  mockGetTableData,
 } from "./mock";
 import type {
   UploadResponse,
@@ -47,6 +49,7 @@ export async function getDatasetTypes(): Promise<DatasetTypesResponse> {
 }
 
 export async function getTables(type: string): Promise<TablesResponse> {
+  if (USE_MOCK) return mockGetTables(type);
   return apiGet<TablesResponse>(`/datasets/${type}/tables`);
 }
 
@@ -63,6 +66,17 @@ export interface TableDataParams {
 export async function getTableData(
   params: TableDataParams,
 ): Promise<TableDataResponse> {
+  if (USE_MOCK) {
+    return mockGetTableData(
+      params.type,
+      params.name,
+      params.page ?? 1,
+      params.pageSize ?? 50,
+      params.sortBy,
+      params.sortDir,
+    );
+  }
+
   const searchParams = new URLSearchParams();
   if (params.page) searchParams.set("page", String(params.page));
   if (params.pageSize) searchParams.set("pageSize", String(params.pageSize));
