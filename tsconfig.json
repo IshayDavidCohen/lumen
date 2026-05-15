@@ -17,8 +17,8 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./*"]
     }
   },
-  "include": ["src", "vite-env.d.ts"]
+  "include": ["app", "components", "services", "hooks", "constants", "lib", "assets", "*.tsx", "*.ts", "vite-env.d.ts"]
 }

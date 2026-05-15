@@ -1,15 +1,16 @@
-import { NavLink } from "react-router-dom";
-import { Sun, Moon } from "lucide-react";
+import { NavLink, Link } from "react-router-dom";
+import { Sun, Moon, Settings, HelpCircle } from "lucide-react";
 import { useThemeStore } from "@/hooks/useTheme";
 
 const NAV_ITEMS = [
+  { to: "/dashboard", label: "Dashboard" },
   { to: "/ingest", label: "Ingest" },
   { to: "/data", label: "Data" },
-  { to: "/query", label: "Query" },
+  { to: "/topology", label: "Topology" },
   { to: "/datasets", label: "Datasets" },
 ] as const;
 
-export function NavBar() {
+export function NavBar({ onShowShortcuts }: { onShowShortcuts?: () => void }) {
   const { theme, toggle } = useThemeStore();
 
   return (
@@ -56,7 +57,35 @@ export function NavBar() {
         ))}
       </nav>
 
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-1">
+        {onShowShortcuts && (
+          <button
+            onClick={onShowShortcuts}
+            className="
+              flex h-8 w-8 items-center justify-center rounded-full
+              transition-colors duration-150
+              text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700
+              dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300
+            "
+            aria-label="Keyboard shortcuts"
+            title="Keyboard shortcuts (Shift+?)"
+          >
+            <HelpCircle size={16} />
+          </button>
+        )}
+        <Link
+          to="/settings"
+          className="
+            flex h-8 w-8 items-center justify-center rounded-full
+            transition-colors duration-150
+            text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700
+            dark:text-zinc-500 dark:hover:bg-zinc-800 dark:hover:text-zinc-300
+          "
+          aria-label="Settings"
+          title="Settings"
+        >
+          <Settings size={16} />
+        </Link>
         <button
           onClick={toggle}
           className="

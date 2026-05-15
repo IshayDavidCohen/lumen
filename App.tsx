@@ -7,22 +7,27 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { AppShell } from "@/components/AppShell";
 
+import DashboardPage from "@/app/(app)/dashboard/page";
 import IngestPage from "@/app/(app)/ingest/page";
 import DataPage from "@/app/(app)/data/page";
-import QueryPage from "@/app/(app)/query/page";
 import DatasetsPage from "@/app/(app)/datasets/page";
+import TopologyPage from "@/app/(app)/topology/page";
+import SettingsPage from "@/app/(app)/settings/page";
 
 const router = createBrowserRouter([
   {
     element: <AppShell />,
     children: [
-      { index: true, element: <Navigate to="/ingest" replace /> },
+      { index: true, element: <DashboardPage /> },
+      { path: "dashboard", element: <DashboardPage /> },
       { path: "ingest", element: <IngestPage /> },
       { path: "data", element: <DataPage /> },
       { path: "data/:type", element: <DataPage /> },
       { path: "data/:type/:table", element: <DataPage /> },
-      { path: "query", element: <QueryPage /> },
+      { path: "query", element: <Navigate to="/data" replace /> },
+      { path: "topology", element: <TopologyPage /> },
       { path: "datasets", element: <DatasetsPage /> },
+      { path: "settings", element: <SettingsPage /> },
     ],
   },
 ]);

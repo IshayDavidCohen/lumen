@@ -8,6 +8,7 @@ import {
   type ColumnFiltersState,
 } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import {
   ChevronLeft,
   ChevronRight,
@@ -22,7 +23,22 @@ import {
   Calendar,
   ToggleLeft,
   HelpCircle,
+  BarChart2,
+  FileSpreadsheet,
+  FileJson,
+  Copy,
+  Loader2,
 } from "lucide-react";
+import { ColumnProfileDialog } from "@/components/ColumnProfile";
+import { useToast } from "@/components/ui/Toast";
+import {
+  rowsToCsv,
+  rowsToJson,
+  rowsToTsv,
+  downloadAsFile,
+  copyToClipboard,
+} from "@/lib/exportUtils";
+import { getAllTableData } from "@/services/datasets";
 import type { Column } from "@/constants/apiTypes";
 
 interface DataTableProps {
@@ -36,6 +52,8 @@ interface DataTableProps {
   onSortChange: (columnId: string, direction: "asc" | "desc" | null) => void;
   sorting?: { id: string; desc: boolean } | null;
   isLoading?: boolean;
+  datasetType?: string;
+  tableName?: string;
 }
 
 const TYPE_ICONS: Record<Column["type"], typeof Hash> = {
@@ -62,32 +80,6 @@ function formatCellValue(value: unknown, colType: Column["type"]): string {
   return String(value);
 }
 
-function exportToCsv(columns: Column[], rows: Record<string, unknown>[]) {
-  const header = columns.map((c) => c.name).join(",");
-  const body = rows
-    .map((row) =>
-      columns
-        .map((c) => {
-          const val = row[c.name];
-          if (val === null || val === undefined) return "";
-          const str = String(val);
-          return str.includes(",") || str.includes('"') || str.includes("\n")
-            ? `"${str.replace(/"/g, '""')}"`
-            : str;
-        })
-        .join(","),
-    )
-    .join("\n");
-  const csv = `${header}\n${body}`;
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `export-${Date.now()}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
 const PAGE_SIZES = [25, 50, 100];
 
 export function DataTable({
@@ -101,9 +93,15 @@ export function DataTable({
   onSortChange,
   sorting: externalSort,
   isLoading,
+  datasetType,
+  tableName,
 }: DataTableProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [profileColumn, setProfileColumn] = useState<{ name: string; type: Column["type"] } | null>(null);
+  const [exportingAll, setExportingAll] = useState(false);
+  const [exportProgress, setExportProgress] = useState("");
+  const { toast } = useToast();
 
   const tableSorting: SortingState = externalSort
     ? [{ id: externalSort.id, desc: externalSort.desc }]
@@ -169,17 +167,139 @@ export function DataTable({
         <span className="text-xs font-mono text-zinc-400 dark:text-zinc-500">
           {total.toLocaleString()} row{total !== 1 ? "s" : ""}
         </span>
-        <button
-          onClick={() => exportToCsv(apiColumns, rows)}
-          disabled={rows.length === 0}
-          className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors duration-150
-                     text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700
-                     dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200
-                     disabled:opacity-40 disabled:pointer-events-none"
-        >
-          <Download size={12} />
-          Export CSV
-        </button>
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <button
+              disabled={rows.length === 0}
+              className="flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors duration-150
+                         text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700
+                         dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200
+                         disabled:opacity-40 disabled:pointer-events-none"
+            >
+              <Download size={12} />
+              Export
+            </button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              className="z-50 min-w-[180px] rounded-md border bg-white p-1 shadow-lg
+                         border-zinc-200 dark:border-zinc-700 dark:bg-zinc-900"
+              align="end"
+              sideOffset={4}
+            >
+              <DropdownMenu.Item
+                className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-xs outline-none
+                           text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                onSelect={() => {
+                  const csv = rowsToCsv(apiColumns, rows);
+                  downloadAsFile(csv, `export-${Date.now()}.csv`, "text/csv");
+                }}
+              >
+                <FileSpreadsheet size={12} /> Export as CSV
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-xs outline-none
+                           text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                onSelect={() => {
+                  const json = rowsToJson(rows);
+                  downloadAsFile(json, `export-${Date.now()}.json`, "application/json");
+                }}
+              >
+                <FileJson size={12} /> Export as JSON
+              </DropdownMenu.Item>
+
+              {datasetType && tableName && (
+                <>
+                  <DropdownMenu.Separator className="my-1 h-px bg-zinc-200 dark:bg-zinc-800" />
+                  {total > 100_000 ? (
+                    <DropdownMenu.Item
+                      className="flex cursor-default items-center gap-2 rounded-sm px-2 py-1.5 text-xs
+                                 text-zinc-400 dark:text-zinc-600"
+                      disabled
+                    >
+                      <Download size={12} /> Export all — too many rows
+                    </DropdownMenu.Item>
+                  ) : (
+                    <>
+                      <DropdownMenu.Item
+                        className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-xs outline-none
+                                   text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        disabled={exportingAll}
+                        onSelect={() => {
+                          setExportingAll(true);
+                          setExportProgress("0%");
+                          void getAllTableData(
+                            { type: datasetType, name: tableName },
+                            (fetched, t) => setExportProgress(`${Math.round((fetched / t) * 100)}%`),
+                          ).then((result) => {
+                            const csv = rowsToCsv(result.columns, result.rows);
+                            downloadAsFile(csv, `export-all-${Date.now()}.csv`, "text/csv");
+                            toast(`Exported ${result.rows.length} rows as CSV`, "success");
+                          }).finally(() => {
+                            setExportingAll(false);
+                            setExportProgress("");
+                          });
+                        }}
+                      >
+                        {exportingAll ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                        {exportingAll ? `Fetching... ${exportProgress}` : `Export all as CSV (${total.toLocaleString()} rows)`}
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item
+                        className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-xs outline-none
+                                   text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        disabled={exportingAll}
+                        onSelect={() => {
+                          setExportingAll(true);
+                          setExportProgress("0%");
+                          void getAllTableData(
+                            { type: datasetType, name: tableName },
+                            (fetched, t) => setExportProgress(`${Math.round((fetched / t) * 100)}%`),
+                          ).then((result) => {
+                            const json = rowsToJson(result.rows);
+                            downloadAsFile(json, `export-all-${Date.now()}.json`, "application/json");
+                            toast(`Exported ${result.rows.length} rows as JSON`, "success");
+                          }).finally(() => {
+                            setExportingAll(false);
+                            setExportProgress("");
+                          });
+                        }}
+                      >
+                        {exportingAll ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
+                        {exportingAll ? `Fetching... ${exportProgress}` : `Export all as JSON (${total.toLocaleString()} rows)`}
+                      </DropdownMenu.Item>
+                    </>
+                  )}
+                </>
+              )}
+
+              <DropdownMenu.Separator className="my-1 h-px bg-zinc-200 dark:bg-zinc-800" />
+              <DropdownMenu.Item
+                className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-xs outline-none
+                           text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                onSelect={() => {
+                  const tsv = rowsToTsv(apiColumns, rows);
+                  void copyToClipboard(tsv).then((ok) => {
+                    toast(ok ? `Copied ${rows.length} rows to clipboard` : "Failed to copy", ok ? "success" : "error");
+                  });
+                }}
+              >
+                <Copy size={12} /> Copy to clipboard
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-xs outline-none
+                           text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                onSelect={() => {
+                  const json = rowsToJson(rows, false);
+                  void copyToClipboard(json).then((ok) => {
+                    toast(ok ? `Copied ${rows.length} rows as JSON` : "Failed to copy", ok ? "success" : "error");
+                  });
+                }}
+              >
+                <Copy size={12} /> Copy as JSON
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
       </div>
 
       {/* Table */}
@@ -200,7 +320,7 @@ export function DataTable({
                     return (
                       <th
                         key={header.id}
-                        className="border-b px-3 py-2 text-left font-medium
+                        className="group/th border-b px-3 py-2 text-left font-medium
                                    border-zinc-200 text-zinc-600
                                    dark:border-zinc-800 dark:text-zinc-400"
                       >
@@ -225,6 +345,19 @@ export function DataTable({
                             <span className="ml-1 text-[10px] opacity-40">{meta.nullablePct}% null</span>
                           )}
                         </button>
+                        {datasetType && tableName && meta && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setProfileColumn({ name: header.id, type: meta.colType });
+                            }}
+                            className="ml-0.5 rounded p-0.5 opacity-0 transition-opacity group-hover/th:opacity-100
+                                       text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400"
+                            title={`Profile ${header.id}`}
+                          >
+                            <BarChart2 size={12} />
+                          </button>
+                        )}
                       </th>
                     );
                   })}
@@ -352,6 +485,18 @@ export function DataTable({
           </PagBtn>
         </div>
       </div>
+
+      {/* Column profile dialog */}
+      {datasetType && tableName && profileColumn && (
+        <ColumnProfileDialog
+          open={!!profileColumn}
+          onOpenChange={(open) => { if (!open) setProfileColumn(null); }}
+          datasetType={datasetType}
+          tableName={tableName}
+          columnName={profileColumn.name}
+          columnType={profileColumn.type}
+        />
+      )}
     </div>
   );
 }

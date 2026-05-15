@@ -3,5 +3,5 @@
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo"
   },
-  "include": ["src"]
+  "include": ["app", "components", "services", "hooks", "constants", "lib", "assets", "*.tsx", "*.ts"]
 }
