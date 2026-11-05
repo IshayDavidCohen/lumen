@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { to: "/data", label: "Data" },
   { to: "/topology", label: "Topology" },
   { to: "/datasets", label: "Datasets" },
+  { to: "/batches", label: "Batches" },
 ] as const;
 
 export function NavBar({ onShowShortcuts }: { onShowShortcuts?: () => void }) {

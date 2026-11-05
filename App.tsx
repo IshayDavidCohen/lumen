@@ -11,6 +11,7 @@ import DashboardPage from "@/app/(app)/dashboard/page";
 import IngestPage from "@/app/(app)/ingest/page";
 import DataPage from "@/app/(app)/data/page";
 import DatasetsPage from "@/app/(app)/datasets/page";
+import BatchesPage from "@/app/(app)/batches/page";
 import TopologyPage from "@/app/(app)/topology/page";
 import SettingsPage from "@/app/(app)/settings/page";
 
@@ -27,6 +28,7 @@ const router = createBrowserRouter([
       { path: "query", element: <Navigate to="/data" replace /> },
       { path: "topology", element: <TopologyPage /> },
       { path: "datasets", element: <DatasetsPage /> },
+      { path: "batches", element: <BatchesPage /> },
       { path: "settings", element: <SettingsPage /> },
     ],
   },
