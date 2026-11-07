@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
-import { ChevronRight, RefreshCw, Trash2, Upload } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RefreshCw, Search, Trash2, Upload } from "lucide-react";
 import {
   deleteBatch,
   getBatch,
@@ -24,7 +24,10 @@ const POLL_INTERVAL_MS = 3_000;
 
 // Shared by the column header and each batch row so they line up.
 const ROW_COLUMNS =
-  "md:grid md:grid-cols-[1rem_minmax(0,13rem)_minmax(0,1fr)_11rem_4rem_6rem]";
+  "md:grid md:grid-cols-[1rem_minmax(0,12rem)_minmax(0,10rem)_minmax(0,8rem)_minmax(0,1fr)_10rem_4rem_6rem]";
+
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
+const DEFAULT_PAGE_SIZE = 20;
 
 // ── Batch status (derived from per-file counts) ───────────────
 
@@ -219,6 +222,27 @@ function DetailRow({
   );
 }
 
+function PagBtn({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex h-7 w-7 items-center justify-center rounded transition-colors duration-150 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 disabled:cursor-not-allowed disabled:opacity-30 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+    >
+      {children}
+    </button>
+  );
+}
+
 // ── Expanded panel: actions ───────────────────────────────────
 
 function DeleteBatchButton({
@@ -326,6 +350,8 @@ function BatchDetails({ batch }: { batch: BatchDetail }) {
     >
       <h3 className="mb-1 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Details</h3>
       <dl className="divide-y divide-zinc-100 text-sm dark:divide-zinc-800/60">
+        <DetailRow label="Title">{batch.title ?? "—"}</DetailRow>
+        <DetailRow label="Owner">{batch.owner ?? "—"}</DetailRow>
         <DetailRow label="Batch ID" mono>{batch.batch_id}</DetailRow>
         <DetailRow label="Ingest type" mono>{batch.ingest_type}</DetailRow>
         <DetailRow label="Source">{batch.source ?? "—"}</DetailRow>
@@ -582,6 +608,12 @@ function BatchRow({
             {batch.ingest_type}
           </span>
         </span>
+        <span className="hidden min-w-0 truncate md:block text-sm text-zinc-700 dark:text-zinc-300">
+          {batch.title ?? <span className="text-zinc-400 dark:text-zinc-600">—</span>}
+        </span>
+        <span className="hidden min-w-0 truncate md:block text-sm text-zinc-500 dark:text-zinc-400">
+          {batch.owner ?? "—"}
+        </span>
         <span className="w-full min-w-0 md:w-auto">
           <SegmentedProgress counts={batch.file_counts} />
         </span>
@@ -611,6 +643,9 @@ export default function BatchesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const openId = searchParams.get("open");
   const [filter, setFilter] = useState<BatchFilter>("all");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["batches"],
@@ -626,6 +661,22 @@ export default function BatchesPage() {
     status: getBatchStatus(batch),
   }));
   const visible = rows.filter((r) => FILTER_MATCH[filter](r.status));
+
+  const searched = search.trim()
+    ? visible.filter((r) => {
+        const q = search.toLowerCase();
+        return (
+          r.batch.batch_id.toLowerCase().includes(q) ||
+          (r.batch.title?.toLowerCase().includes(q) ?? false) ||
+          (r.batch.owner?.toLowerCase().includes(q) ?? false) ||
+          r.batch.ingest_type.toLowerCase().includes(q)
+        );
+      })
+    : visible;
+
+  const totalPages = Math.max(1, Math.ceil(searched.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paged = searched.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   // The open batch lives in the URL (?open=<id>) so it can be linked to.
   const setOpenBatch = (batchId: string | null) =>
@@ -657,7 +708,7 @@ export default function BatchesPage() {
         </Link>
       </div>
 
-      <div role="group" aria-label="Filter batches" className="mb-4 flex flex-wrap gap-2">
+      <div role="group" aria-label="Filter batches" className="mb-4 flex flex-wrap items-center gap-2">
         {FILTERS.map((f) => {
           const selected = filter === f.id;
           const count = rows.filter((r) => FILTER_MATCH[f.id](r.status)).length;
@@ -666,7 +717,7 @@ export default function BatchesPage() {
               key={f.id}
               type="button"
               aria-pressed={selected}
-              onClick={() => setFilter(f.id)}
+              onClick={() => { setFilter(f.id); setPage(1); }}
               className={`inline-flex h-8 items-center gap-2 rounded-full border px-3 text-xs font-medium transition-colors duration-150 ${
                 selected
                   ? "border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900"
@@ -686,6 +737,19 @@ export default function BatchesPage() {
             </button>
           );
         })}
+        <div className="relative ml-auto">
+          <Search
+            size={13}
+            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 dark:text-zinc-500"
+          />
+          <input
+            type="search"
+            placeholder="Search batches…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="h-8 w-52 rounded-full border bg-white pl-8 pr-3 text-xs text-zinc-700 placeholder-zinc-400 transition-colors duration-150 border-zinc-200 focus:border-zinc-400 focus:outline-none dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-300 dark:placeholder-zinc-500 dark:focus:border-zinc-600"
+          />
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50">
@@ -695,6 +759,8 @@ export default function BatchesPage() {
         >
           <span />
           <span>Batch</span>
+          <span>Title</span>
+          <span>Owner</span>
           <span>Progress</span>
           <span>Status</span>
           <span className="text-right">Files</span>
@@ -738,21 +804,62 @@ export default function BatchesPage() {
           </p>
         )}
 
-        {visible.length > 0 && (
-          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
-            {visible.map(({ batch, status }) => (
-              <BatchRow
-                key={batch.batch_id}
-                batch={batch}
-                status={status}
-                isOpen={openId === batch.batch_id}
-                onToggle={() =>
-                  setOpenBatch(openId === batch.batch_id ? null : batch.batch_id)
-                }
-                onDeleted={() => setOpenBatch(null)}
-              />
-            ))}
-          </ul>
+        {!isLoading && !isError && visible.length > 0 && searched.length === 0 && (
+          <p className="py-16 text-center text-sm text-zinc-500 dark:text-zinc-500">
+            No batches match your search.
+          </p>
+        )}
+
+        {paged.length > 0 && (
+          <>
+            <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
+              {paged.map(({ batch, status }) => (
+                <BatchRow
+                  key={batch.batch_id}
+                  batch={batch}
+                  status={status}
+                  isOpen={openId === batch.batch_id}
+                  onToggle={() =>
+                    setOpenBatch(openId === batch.batch_id ? null : batch.batch_id)
+                  }
+                  onDeleted={() => setOpenBatch(null)}
+                />
+              ))}
+            </ul>
+            {searched.length > pageSize && (
+              <div className="flex items-center justify-between border-t px-5 py-3 border-zinc-100 dark:border-zinc-800/60">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-400 dark:text-zinc-500">Per page</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                    className="h-7 rounded border px-1.5 text-xs border-zinc-300 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+                  >
+                    {PAGE_SIZE_OPTIONS.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="mr-2 font-mono text-xs text-zinc-400 dark:text-zinc-500">
+                    {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, searched.length)} of {searched.length}
+                  </span>
+                  <PagBtn onClick={() => setPage(1)} disabled={safePage <= 1}>
+                    <ChevronsLeft size={14} />
+                  </PagBtn>
+                  <PagBtn onClick={() => setPage(safePage - 1)} disabled={safePage <= 1}>
+                    <ChevronLeft size={14} />
+                  </PagBtn>
+                  <PagBtn onClick={() => setPage(safePage + 1)} disabled={safePage >= totalPages}>
+                    <ChevronRight size={14} />
+                  </PagBtn>
+                  <PagBtn onClick={() => setPage(totalPages)} disabled={safePage >= totalPages}>
+                    <ChevronsRight size={14} />
+                  </PagBtn>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

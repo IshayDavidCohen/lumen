@@ -87,7 +87,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               onOpenChange={(open) => {
                 if (!open) removeToast(t.id);
               }}
-              className={`flex items-center gap-3 rounded-lg border px-4 py-3 ${config.classes}`}
+              className={`toast-item flex items-center gap-3 rounded-lg border px-4 py-3 ${config.classes}`}
             >
               <Icon size={16} className={`shrink-0 ${config.iconClass}`} />
               <ToastPrimitive.Description className="flex-1 text-sm font-medium">

@@ -12,6 +12,8 @@ export type BatchFileCounts = Partial<Record<UploadStatus, number>>;
 export interface BatchSummary {
   batch_id: string;
   ingest_type: string;
+  title: string | null;
+  owner: string | null;
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
