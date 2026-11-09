@@ -2,18 +2,36 @@ import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RefreshCw, Search, Trash2, Upload } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  CircleStop,
+  Download,
+  Link2,
+  Pencil,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  Table2,
+  Trash2,
+  Upload,
+} from "lucide-react";
 import {
   addBatchNote,
+  cancelBatch,
   dataQueryPath,
   deleteBatch,
   deleteBatchNote,
   getBatch,
   listBatches,
   listBatchNotes,
+  retryFailedFiles,
   rowsWhereSql,
   stepTarget,
   updateBatchNote,
+  updateBatchTitle,
   type BatchDetail,
   type BatchFile,
   type BatchFileCounts,
@@ -37,7 +55,8 @@ import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
 import { STATUS_CONFIG } from "@/constants/uploadStatus";
 import { formatFileSize } from "@/constants/fileTypes";
-import type { UploadStatus } from "@/constants/apiTypes";
+import type { Column, UploadStatus } from "@/constants/apiTypes";
+import { copyToClipboard, downloadAsFile, rowsToCsv } from "@/lib/exportUtils";
 
 const POLL_INTERVAL_MS = 3_000;
 const SEARCH_DEBOUNCE_MS = 300;
@@ -309,6 +328,128 @@ function DeleteBatchButton({
   );
 }
 
+const ACTION_CLASSES = "w-full justify-start";
+
+const FILE_CSV_COLUMNS: Column[] = [
+  "filename",
+  "iteration",
+  "status",
+  "size_bytes",
+  "rows_written",
+  "error",
+  "started_at",
+  "finished_at",
+].map((name) => ({ name, type: "string", nullable_pct: 0 }));
+
+/** Runs a batch action, then refreshes the batch and the list. */
+function useBatchAction<T = void>(
+  batchId: string,
+  fn: (arg: T) => Promise<unknown>,
+  successMessage: string,
+) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["batch", batchId] });
+      void queryClient.invalidateQueries({ queryKey: ["batches"] });
+      toast(successMessage, "success");
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : "Action failed", "error"),
+  });
+}
+
+function EditTitleAction({ batch }: { batch: BatchDetail }) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState("");
+  const save = useBatchAction(
+    batch.batch_id,
+    (next: string | null) => updateBatchTitle(batch.batch_id, next),
+    "Title updated",
+  );
+
+  if (!editing) {
+    return (
+      <Button
+        className={ACTION_CLASSES}
+        onClick={() => {
+          setTitle(batch.title ?? "");
+          setEditing(true);
+        }}
+      >
+        <Pencil size={14} />
+        Edit title
+      </Button>
+    );
+  }
+
+  const submit = () => save.mutate(title.trim() || null, { onSuccess: () => setEditing(false) });
+  return (
+    <div className="flex flex-col gap-1.5">
+      <input
+        autoFocus
+        aria-label="Batch title"
+        placeholder="Batch title"
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") submit();
+          if (e.key === "Escape") setEditing(false);
+        }}
+        className={FIELD_CLASSES}
+      />
+      <div className="flex gap-1.5">
+        <Button size="sm" variant="primary" onClick={submit} disabled={save.isPending}>
+          Save
+        </Button>
+        <Button size="sm" onClick={() => setEditing(false)}>
+          Cancel
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function CancelBatchAction({ batch }: { batch: BatchDetail }) {
+  const [confirming, setConfirming] = useState(false);
+  const cancel = useBatchAction(
+    batch.batch_id,
+    () => cancelBatch(batch.batch_id),
+    `Cancelled ${batch.batch_id}`,
+  );
+
+  if (!confirming) {
+    return (
+      <Button className={ACTION_CLASSES} onClick={() => setConfirming(true)}>
+        <CircleStop size={14} />
+        Cancel batch
+      </Button>
+    );
+  }
+
+  return (
+    <div className="flex h-9 items-center gap-2 px-4 text-xs">
+      <span className="text-zinc-500 dark:text-zinc-400">Stop it?</span>
+      <button
+        type="button"
+        disabled={cancel.isPending}
+        onClick={() => cancel.mutate()}
+        className="font-medium text-red-600 hover:underline dark:text-red-400"
+      >
+        Yes
+      </button>
+      <button
+        type="button"
+        onClick={() => setConfirming(false)}
+        className="text-zinc-500 hover:underline dark:text-zinc-400"
+      >
+        No
+      </button>
+    </div>
+  );
+}
+
 function BatchActions({
   batch,
   onDeleted,
@@ -316,10 +457,47 @@ function BatchActions({
   batch: BatchDetail;
   onDeleted: () => void;
 }) {
+  const { toast } = useToast();
+  const failed = countOf(batch.file_counts, "FAILED");
+  const retry = useBatchAction(
+    batch.batch_id,
+    () => retryFailedFiles(batch.batch_id),
+    `Retrying ${failed} failed file${failed !== 1 ? "s" : ""}`,
+  );
+
+  const share = async () => {
+    const url = new URL(window.location.href);
+    url.search = new URLSearchParams({ open: batch.batch_id }).toString();
+    const copied = await copyToClipboard(url.toString());
+    toast(copied ? "Link copied" : "Couldn't copy the link", copied ? "success" : "error");
+  };
+
+  const exportFiles = () =>
+    downloadAsFile(
+      rowsToCsv(FILE_CSV_COLUMNS, batch.files.map((f) => ({ ...f }))),
+      `${batch.batch_id}-files.csv`,
+      "text/csv",
+    );
+
   return (
     <aside aria-label="Batch actions" className="flex w-full flex-col gap-2 sm:w-40 sm:shrink-0">
       <h3 className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Actions</h3>
-      {/* Further batch actions (re-ingest, rename, export) go in this column. */}
+      <Button className={ACTION_CLASSES} onClick={() => void share()}>
+        <Link2 size={14} />
+        Share batch
+      </Button>
+      <Button className={ACTION_CLASSES} onClick={exportFiles}>
+        <Download size={14} />
+        Export file list
+      </Button>
+      <EditTitleAction batch={batch} />
+      {failed > 0 && (
+        <Button className={ACTION_CLASSES} onClick={() => retry.mutate()} disabled={retry.isPending}>
+          <RotateCcw size={14} />
+          Retry failed ({failed})
+        </Button>
+      )}
+      {isActiveStatus(getBatchStatus(batch)) && <CancelBatchAction batch={batch} />}
       <DeleteBatchButton batch={batch} onDeleted={onDeleted} />
     </aside>
   );
@@ -540,6 +718,7 @@ function PipelineNode({ step, batch }: { step: PipelineStep; batch: BatchDetail 
       className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 font-mono text-xs transition-colors duration-150 border-zinc-200 bg-white text-zinc-700 hover:border-blue-400 hover:text-blue-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-blue-500 dark:hover:text-blue-400"
     >
       <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
+      <Table2 size={12} aria-hidden="true" className="shrink-0 text-zinc-400 dark:text-zinc-500" />
       {step.name}
       <span className="sr-only"> ({label})</span>
     </Link>

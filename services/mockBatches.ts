@@ -742,6 +742,45 @@ export async function mockDeleteBatch(batchId: string): Promise<void> {
   notes.delete(batchId);
 }
 
+function findBatch(batchId: string): BatchDetail {
+  const batch = store.find((b) => b.batch_id === batchId);
+  if (!batch) throw notFound(batchId);
+  return batch;
+}
+
+export async function mockCancelBatch(batchId: string): Promise<void> {
+  await delay(300);
+  const batch = findBatch(batchId);
+  for (const file of batch.files) {
+    if (!isActiveFile(file)) continue;
+    file.status = "FAILED";
+    file.progress = null;
+    file.error = "Cancelled.";
+    file.finished_at = iso(Date.now());
+  }
+  finalize(batch, Date.now());
+}
+
+export async function mockRetryFailedFiles(batchId: string): Promise<void> {
+  await delay(300);
+  const batch = findBatch(batchId);
+  for (const file of batch.files) {
+    if (file.status !== "FAILED") continue;
+    file.status = "QUEUED";
+    file.error = null;
+    file.rows_written = null;
+    file.started_at = null;
+    file.finished_at = null;
+  }
+  batch.finished_at = null;
+  finalize(batch, Date.now());
+}
+
+export async function mockUpdateBatchTitle(batchId: string, title: string | null): Promise<void> {
+  await delay(200);
+  findBatch(batchId).title = title;
+}
+
 // ── Notes ─────────────────────────────────────────────────────
 
 const notes = new Map<string, BatchNote[]>([

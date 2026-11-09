@@ -1,12 +1,15 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from "./api";
 import {
   mockAddBatchNote,
+  mockCancelBatch,
   mockDeleteBatch,
   mockDeleteBatchNote,
   mockGetBatch,
   mockListBatches,
   mockListBatchNotes,
+  mockRetryFailedFiles,
   mockUpdateBatchNote,
+  mockUpdateBatchTitle,
 } from "./mockBatches";
 import type { UploadStatus } from "@/constants/apiTypes";
 import type { BatchFilter } from "./batchStatus";
@@ -172,6 +175,23 @@ export async function getBatch(
 export async function deleteBatch(batchId: string): Promise<void> {
   if (USE_MOCK) return mockDeleteBatch(batchId);
   return apiDelete(`/batches/${encodeURIComponent(batchId)}`);
+}
+
+/** Stop a queued or running batch. */
+export async function cancelBatch(batchId: string): Promise<void> {
+  if (USE_MOCK) return mockCancelBatch(batchId);
+  return apiPost(`/batches/${encodeURIComponent(batchId)}/cancel`, {});
+}
+
+/** Send the batch's failed files back through the pipeline. */
+export async function retryFailedFiles(batchId: string): Promise<void> {
+  if (USE_MOCK) return mockRetryFailedFiles(batchId);
+  return apiPost(`/batches/${encodeURIComponent(batchId)}/retry`, {});
+}
+
+export async function updateBatchTitle(batchId: string, title: string | null): Promise<void> {
+  if (USE_MOCK) return mockUpdateBatchTitle(batchId, title);
+  return apiPatch(`/batches/${encodeURIComponent(batchId)}`, { title });
 }
 
 // ── Notes ─────────────────────────────────────────────────────
