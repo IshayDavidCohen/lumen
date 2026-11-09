@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RefreshCw, Search, Trash2, Upload } from "lucide-react";
 import {
@@ -9,12 +9,23 @@ import {
   deleteBatch,
   getBatch,
   listBatches,
+  rowsWhereSql,
   type BatchDetail,
   type BatchFile,
   type BatchFileCounts,
   type BatchListResponse,
   type BatchSummary,
+  type PipelineStep,
+  type PipelineStepStatus,
 } from "@/services/batches";
+import {
+  countOf,
+  getBatchStatus,
+  isActiveStatus,
+  type BatchFilter,
+  type BatchStatus,
+} from "@/services/batchStatus";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/Toast";
@@ -23,6 +34,7 @@ import { formatFileSize } from "@/constants/fileTypes";
 import type { UploadStatus } from "@/constants/apiTypes";
 
 const POLL_INTERVAL_MS = 3_000;
+const SEARCH_DEBOUNCE_MS = 300;
 
 // Shared by the column header and each batch row so they line up.
 const ROW_COLUMNS =
@@ -32,13 +44,6 @@ const PAGE_SIZE_OPTIONS = [10, 20, 50];
 const DEFAULT_PAGE_SIZE = 20;
 
 // ── Batch status (derived from per-file counts) ───────────────
-
-type BatchStatus =
-  | "QUEUED"
-  | "PROCESSING"
-  | "COMPLETED"
-  | "COMPLETED_WITH_ERRORS"
-  | "FAILED";
 
 const BATCH_STATUS_STYLES: Record<
   BatchStatus,
@@ -71,30 +76,7 @@ const BATCH_STATUS_STYLES: Record<
   },
 };
 
-function countOf(counts: BatchFileCounts, status: UploadStatus): number {
-  return counts[status] ?? 0;
-}
-
-function getBatchStatus(batch: BatchSummary): BatchStatus {
-  const counts = batch.file_counts;
-  const total = batch.file_count;
-  const waiting = countOf(counts, "UPLOADED") + countOf(counts, "QUEUED");
-  const failed = countOf(counts, "FAILED");
-
-  if (total > 0 && waiting === total) return "QUEUED";
-  if (countOf(counts, "PROCESSING") > 0 || waiting > 0) return "PROCESSING";
-  if (total > 0 && failed === total) return "FAILED";
-  if (failed > 0) return "COMPLETED_WITH_ERRORS";
-  return "COMPLETED";
-}
-
-function isActiveStatus(status: BatchStatus): boolean {
-  return status === "QUEUED" || status === "PROCESSING";
-}
-
 // ── Filters ───────────────────────────────────────────────────
-
-type BatchFilter = "all" | "active" | "attention" | "completed";
 
 const FILTERS: Array<{ id: BatchFilter; label: string }> = [
   { id: "all", label: "All" },
@@ -102,13 +84,6 @@ const FILTERS: Array<{ id: BatchFilter; label: string }> = [
   { id: "attention", label: "Needs attention" },
   { id: "completed", label: "Completed" },
 ];
-
-const FILTER_MATCH: Record<BatchFilter, (status: BatchStatus) => boolean> = {
-  all: () => true,
-  active: isActiveStatus,
-  attention: (s) => s === "FAILED" || s === "COMPLETED_WITH_ERRORS",
-  completed: (s) => s === "COMPLETED",
-};
 
 // ── Formatting ────────────────────────────────────────────────
 
@@ -262,9 +237,12 @@ function DeleteBatchButton({
     mutationFn: () => deleteBatch(batch.batch_id),
     onSuccess: () => {
       setOpen(false);
-      queryClient.setQueryData<BatchListResponse>(["batches"], (old) =>
+      // Drop the row from every cached page right away; the refetch below
+      // then pulls the next batch up and corrects counts.
+      queryClient.setQueriesData<BatchListResponse>({ queryKey: ["batches"] }, (old) =>
         old
           ? {
+              ...old,
               batches: old.batches.filter((b) => b.batch_id !== batch.batch_id),
               total: Math.max(0, old.total - 1),
             }
@@ -532,6 +510,74 @@ function BatchFiles({ batch }: { batch: BatchDetail }) {
   );
 }
 
+// ── Expanded panel: pipeline ──────────────────────────────────
+
+const STEP_STATUS: Record<PipelineStepStatus, { label: string; dot: string }> = {
+  QUEUED: { label: "Queued", dot: "bg-zinc-400 dark:bg-zinc-500" },
+  PROCESSING: { label: "Processing", dot: "bg-yellow-400 animate-pulse" },
+  FINISHED: { label: "Finished", dot: "bg-green-500" },
+  FAILED: { label: "Failed", dot: "bg-red-500" },
+};
+
+function PipelineNode({ step, batch }: { step: PipelineStep; batch: BatchDetail }) {
+  const table = step.table ?? step.name;
+  const filter = step.filter ?? { column: "batch_id", value: batch.batch_id };
+  const { label, dot } = STEP_STATUS[step.status];
+
+  return (
+    <Link
+      to={dataQueryPath(
+        batch.ingest_type,
+        table,
+        rowsWhereSql(table, { [filter.column]: filter.value }),
+      )}
+      title={`${label} · ${table} where ${filter.column} = ${filter.value}`}
+      className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 font-mono text-xs transition-colors duration-150 border-zinc-200 bg-white text-zinc-700 hover:border-blue-400 hover:text-blue-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-blue-500 dark:hover:text-blue-400"
+    >
+      <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
+      {step.name}
+      <span className="sr-only"> ({label})</span>
+    </Link>
+  );
+}
+
+function BatchPipeline({ batch }: { batch: BatchDetail }) {
+  if (batch.pipeline.length === 0) return null;
+
+  return (
+    <section
+      aria-label="Pipeline"
+      className="w-full rounded-lg border px-4 py-3 border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/50"
+    >
+      <h3 className="mb-3 text-sm font-semibold text-zinc-900 dark:text-zinc-100">Pipeline</h3>
+      <div className="flex flex-wrap items-start gap-x-10 gap-y-4">
+        {batch.pipeline.map(({ parser, analyses }) => (
+          <div key={parser.name} className="flex items-center">
+            <PipelineNode step={parser} batch={batch} />
+            {analyses.length > 0 && (
+              <>
+                <span aria-hidden="true" className="h-px w-4 bg-zinc-300 dark:bg-zinc-700" />
+                {/* Each item draws its own slice of the bracket so the trunk
+                    runs from the first analysis to the last, not past them. */}
+                <ul className="flex flex-col">
+                  {analyses.map((analysis) => (
+                    <li
+                      key={analysis.name}
+                      className="relative py-1 pl-4 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-px before:bg-zinc-300 first:before:top-1/2 last:before:bottom-1/2 after:absolute after:left-0 after:top-1/2 after:h-px after:w-4 after:bg-zinc-300 dark:before:bg-zinc-700 dark:after:bg-zinc-700"
+                    >
+                      <PipelineNode step={analysis} batch={batch} />
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // ── Expanded panel ────────────────────────────────────────────
 
 function BatchPanel({
@@ -580,6 +626,7 @@ function BatchPanel({
           <BatchActions batch={data} onDeleted={onDeleted} />
           <BatchDetails batch={data} />
           <BatchFiles batch={data} />
+          <BatchPipeline batch={data} />
         </div>
       )}
     </div>
@@ -665,36 +712,28 @@ export default function BatchesPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
+  const q = useDebouncedValue(search.trim(), SEARCH_DEBOUNCE_MS);
+
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["batches"],
-    queryFn: ({ signal }) => listBatches(signal),
-    refetchInterval: (query) =>
-      query.state.data?.batches.some((b) => isActiveStatus(getBatchStatus(b)))
-        ? POLL_INTERVAL_MS
-        : false,
+    queryKey: ["batches", { page, pageSize, filter, q }],
+    queryFn: ({ signal }) => listBatches({ page, pageSize, filter, q, signal }),
+    // Keep showing the current page while the next one loads.
+    placeholderData: keepPreviousData,
+    refetchInterval: (query) => (query.state.data?.has_active ? POLL_INTERVAL_MS : false),
   });
 
   const rows = (data?.batches ?? []).map((batch) => ({
     batch,
     status: getBatchStatus(batch),
   }));
-  const visible = rows.filter((r) => FILTER_MATCH[filter](r.status));
-
-  const searched = search.trim()
-    ? visible.filter((r) => {
-        const q = search.toLowerCase();
-        return (
-          r.batch.batch_id.toLowerCase().includes(q) ||
-          (r.batch.title?.toLowerCase().includes(q) ?? false) ||
-          (r.batch.owner?.toLowerCase().includes(q) ?? false) ||
-          r.batch.ingest_type.toLowerCase().includes(q)
-        );
-      })
-    : visible;
-
-  const totalPages = Math.max(1, Math.ceil(searched.length / pageSize));
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, totalPages);
-  const paged = searched.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  // A delete or a shrinking filter can leave us past the last page.
+  useEffect(() => {
+    if (data && page > totalPages) setPage(totalPages);
+  }, [data, page, totalPages]);
 
   // The open batch lives in the URL (?open=<id>) so it can be linked to.
   const setOpenBatch = (batchId: string | null) =>
@@ -729,7 +768,7 @@ export default function BatchesPage() {
       <div role="group" aria-label="Filter batches" className="mb-4 flex flex-wrap items-center gap-2">
         {FILTERS.map((f) => {
           const selected = filter === f.id;
-          const count = rows.filter((r) => FILTER_MATCH[f.id](r.status)).length;
+          const count = data?.counts[f.id];
           return (
             <button
               key={f.id}
@@ -750,7 +789,7 @@ export default function BatchesPage() {
                     : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
                 }`}
               >
-                {isLoading ? "–" : count}
+                {count ?? "–"}
               </span>
             </button>
           );
@@ -807,7 +846,7 @@ export default function BatchesPage() {
           </div>
         )}
 
-        {!isLoading && !isError && rows.length === 0 && (
+        {!isError && data?.counts.all === 0 && (
           <p className="py-16 text-center text-sm text-zinc-500 dark:text-zinc-500">
             No batches yet.{" "}
             <Link to="/ingest" className="text-blue-600 hover:underline dark:text-blue-400">
@@ -816,22 +855,16 @@ export default function BatchesPage() {
           </p>
         )}
 
-        {!isLoading && !isError && rows.length > 0 && visible.length === 0 && (
+        {!isError && !!data?.counts.all && total === 0 && (
           <p className="py-16 text-center text-sm text-zinc-500 dark:text-zinc-500">
-            No batches match this filter.
+            {q ? "No batches match your search." : "No batches match this filter."}
           </p>
         )}
 
-        {!isLoading && !isError && visible.length > 0 && searched.length === 0 && (
-          <p className="py-16 text-center text-sm text-zinc-500 dark:text-zinc-500">
-            No batches match your search.
-          </p>
-        )}
-
-        {paged.length > 0 && (
+        {rows.length > 0 && (
           <>
             <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
-              {paged.map(({ batch, status }) => (
+              {rows.map(({ batch, status }) => (
                 <BatchRow
                   key={batch.batch_id}
                   batch={batch}
@@ -844,7 +877,7 @@ export default function BatchesPage() {
                 />
               ))}
             </ul>
-            {searched.length > pageSize && (
+            {total > pageSize && (
               <div className="flex items-center justify-between border-t px-5 py-3 border-zinc-100 dark:border-zinc-800/60">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-zinc-400 dark:text-zinc-500">Per page</span>
@@ -860,7 +893,7 @@ export default function BatchesPage() {
                 </div>
                 <div className="flex items-center gap-1">
                   <span className="mr-2 font-mono text-xs text-zinc-400 dark:text-zinc-500">
-                    {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, searched.length)} of {searched.length}
+                    {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, total)} of {total}
                   </span>
                   <PagBtn onClick={() => setPage(1)} disabled={safePage <= 1}>
                     <ChevronsLeft size={14} />

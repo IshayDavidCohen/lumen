@@ -6,7 +6,16 @@ import type {
   BatchFileCounts,
   BatchListResponse,
   BatchSummary,
+  ListBatchesParams,
+  PipelineBranch,
+  PipelineStepStatus,
 } from "./batches";
+import {
+  FILTER_MATCH,
+  getBatchStatus,
+  isActiveStatus,
+  type BatchFilter,
+} from "./batchStatus";
 
 // In-memory batches for VITE_MOCK=true. Active batches advance a step
 // every few seconds so the page's polling has something to show.
@@ -475,6 +484,56 @@ const SEEDS: SeedBatch[] = [
   },
 ];
 
+// ── Pipelines ─────────────────────────────────────────────────
+
+/** Pipeline submitted per ingest type: parser → the analyses fed by its output. */
+const PIPELINES: Record<string, Record<string, string[]>> = {
+  pcap: {
+    PcapParser: ["ConnectionAnalysis", "DnsAnalysis", "HttpAnalysis"],
+    TlsParser: ["CertAnalysis", "Ja3Analysis"],
+  },
+  netflow: { FlowParser: ["FlowSummary", "TopTalkers"] },
+  project_b: {
+    CsvParser: ["EventAnalysis", "MetricsAnalysis"],
+    JsonParser: ["AlertCorrelation"],
+  },
+};
+
+/** Mock tables keyed by run_id instead of batch_id. */
+const RUN_ID_TABLES = new Set(["TopTalkers", "Ja3Analysis"]);
+
+/** Step statuses follow the batch's files: parsers run with them, analyses run after. */
+function buildPipeline(batch: BatchDetail): PipelineBranch[] {
+  const template = PIPELINES[batch.ingest_type] ?? {};
+  const { files } = batch;
+  const failed = files.filter((f) => f.status === "FAILED").length;
+
+  let parserStatus: PipelineStepStatus = "FINISHED";
+  if (!batch.started_at) parserStatus = "QUEUED";
+  else if (files.some(isActiveFile)) parserStatus = "PROCESSING";
+  else if (failed === files.length) parserStatus = "FAILED";
+
+  return Object.entries(template).map(([parser, analyses]) => ({
+    parser: { name: parser, status: parserStatus },
+    analyses: analyses.map((name, i) => {
+      let status: PipelineStepStatus = "QUEUED";
+      if (parserStatus === "FINISHED") {
+        // Batches with some failed files fail their last analysis, to show the red state.
+        status = failed > 0 && i === analyses.length - 1 ? "FAILED" : "FINISHED";
+      } else if (parserStatus === "PROCESSING" && i === 0) {
+        status = "PROCESSING";
+      }
+      return {
+        name,
+        status,
+        ...(RUN_ID_TABLES.has(name) && {
+          filter: { column: "run_id", value: `run-${batch.batch_id.slice(-4)}` },
+        }),
+      };
+    }),
+  }));
+}
+
 // ── Store ─────────────────────────────────────────────────────
 
 function countFiles(files: BatchFile[]): BatchFileCounts {
@@ -501,6 +560,7 @@ function finalize(batch: BatchDetail, now: number): void {
   } else if (!batch.finished_at) {
     batch.finished_at = iso(now);
   }
+  batch.pipeline = buildPipeline(batch);
 }
 
 function buildBatch(seed: SeedBatch, now: number): BatchDetail {
@@ -552,6 +612,7 @@ function buildBatch(seed: SeedBatch, now: number): BatchDetail {
     rows_written: null,
     tables: seed.tables,
     files,
+    pipeline: [],
   };
   finalize(batch, now);
   return batch;
@@ -626,10 +687,40 @@ function notFound(batchId: string): ApiError {
 
 // ── Mock API ──────────────────────────────────────────────────
 
-export async function mockListBatches(): Promise<BatchListResponse> {
+export async function mockListBatches(
+  params: ListBatchesParams = {},
+): Promise<BatchListResponse> {
   await delay(300);
   tick();
-  return { batches: store.map(toSummary), total: store.length };
+
+  const all = store.map(toSummary);
+  const statuses = all.map(getBatchStatus);
+  const countFor = (filter: BatchFilter) => statuses.filter(FILTER_MATCH[filter]).length;
+
+  const q = params.q?.trim().toLowerCase() ?? "";
+  const matches = all.filter(
+    (b, i) =>
+      FILTER_MATCH[params.filter ?? "all"](statuses[i]!) &&
+      (!q ||
+        [b.batch_id, b.title, b.owner, b.ingest_type].some((v) =>
+          v?.toLowerCase().includes(q),
+        )),
+  );
+
+  const { page, pageSize } = params;
+  const batches =
+    page && pageSize ? matches.slice((page - 1) * pageSize, page * pageSize) : matches;
+  return {
+    batches,
+    total: matches.length,
+    counts: {
+      all: all.length,
+      active: countFor("active"),
+      attention: countFor("attention"),
+      completed: countFor("completed"),
+    },
+    has_active: statuses.some(isActiveStatus),
+  };
 }
 
 export async function mockGetBatch(batchId: string): Promise<BatchDetail> {
