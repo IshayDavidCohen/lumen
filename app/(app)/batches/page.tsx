@@ -1,20 +1,26 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RefreshCw, Search, Trash2, Upload } from "lucide-react";
 import {
-  batchRowsSql,
+  addBatchNote,
   dataQueryPath,
   deleteBatch,
+  deleteBatchNote,
   getBatch,
   listBatches,
+  listBatchNotes,
   rowsWhereSql,
+  stepTarget,
+  updateBatchNote,
   type BatchDetail,
   type BatchFile,
   type BatchFileCounts,
   type BatchListResponse,
+  type BatchNote,
   type BatchSummary,
+  type NewBatchNote,
   type PipelineStep,
   type PipelineStepStatus,
 } from "@/services/batches";
@@ -249,6 +255,7 @@ function DeleteBatchButton({
           : old,
       );
       queryClient.removeQueries({ queryKey: ["batch", batch.batch_id] });
+      queryClient.removeQueries({ queryKey: ["batch-notes", batch.batch_id] });
       void queryClient.invalidateQueries({ queryKey: ["batches"] });
       toast(`Deleted ${batch.batch_id}`, "success");
       onDeleted();
@@ -352,24 +359,6 @@ function BatchDetails({ batch }: { batch: BatchDetail }) {
         <DetailRow label="Rows written">
           {batch.rows_written === null ? "—" : formatRowCount(batch.rows_written)}
         </DetailRow>
-        <DetailRow label="Tables" mono>
-          {batch.tables.length === 0 ? (
-            "—"
-          ) : (
-            <span className="flex flex-wrap gap-x-3 gap-y-1">
-              {batch.tables.map((table) => (
-                <Link
-                  key={table}
-                  to={dataQueryPath(batch.ingest_type, table, batchRowsSql(table, batch.batch_id))}
-                  title={`Rows from ${batch.batch_id}`}
-                  className="text-blue-600 hover:underline dark:text-blue-400"
-                >
-                  {table}
-                </Link>
-              ))}
-            </span>
-          )}
-        </DetailRow>
       </dl>
     </section>
   );
@@ -380,15 +369,18 @@ function BatchDetails({ batch }: { batch: BatchDetail }) {
 function FileRow({
   file,
   batchId,
+  runId,
   ingestType,
-  tables,
+  parsers,
   isOpen,
   onToggle,
 }: {
   file: BatchFile;
   batchId: string;
+  runId: string;
   ingestType: string;
-  tables: string[];
+  /** Parser steps of the batch's pipeline; their tables are the ones with an iteration column */
+  parsers: PipelineStep[];
   isOpen: boolean;
   onToggle: () => void;
 }) {
@@ -443,20 +435,27 @@ function FileRow({
               {file.error}
             </p>
           )}
-          {file.status === "PARSED" && tables.length > 0 && (
+          {file.status === "PARSED" && parsers.length > 0 && (
             <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span className="text-zinc-500 dark:text-zinc-400">
                 Open iteration {file.iteration} in
               </span>
-              {tables.map((table) => (
-                <Link
-                  key={table}
-                  to={dataQueryPath(ingestType, table, batchRowsSql(table, batchId, file.iteration))}
-                  className="font-mono font-medium text-blue-600 hover:underline dark:text-blue-400"
-                >
-                  {table}
-                </Link>
-              ))}
+              {parsers.map((parser) => {
+                const { table, filter } = stepTarget(parser, { batch_id: batchId, run_id: runId });
+                const sql = rowsWhereSql(table, {
+                  [filter.column]: filter.value,
+                  iteration: file.iteration,
+                });
+                return (
+                  <Link
+                    key={parser.name}
+                    to={dataQueryPath(ingestType, table, sql)}
+                    className="font-mono font-medium text-blue-600 hover:underline dark:text-blue-400"
+                  >
+                    {parser.name}
+                  </Link>
+                );
+              })}
             </p>
           )}
         </div>
@@ -499,8 +498,9 @@ function BatchFiles({ batch }: { batch: BatchDetail }) {
             key={file.job_id}
             file={file}
             batchId={batch.batch_id}
+            runId={batch.run_id}
             ingestType={batch.ingest_type}
-            tables={batch.tables}
+            parsers={batch.pipeline.map((branch) => branch.parser)}
             isOpen={expanded.has(file.job_id)}
             onToggle={() => toggle(file.job_id)}
           />
@@ -519,9 +519,14 @@ const STEP_STATUS: Record<PipelineStepStatus, { label: string; dot: string }> = 
   FAILED: { label: "Failed", dot: "bg-red-500" },
 };
 
+function hasRunningStep(batch: BatchDetail): boolean {
+  return batch.pipeline.some(({ parser, analyses }) =>
+    [parser, ...analyses].some((s) => s.status === "QUEUED" || s.status === "PROCESSING"),
+  );
+}
+
 function PipelineNode({ step, batch }: { step: PipelineStep; batch: BatchDetail }) {
-  const table = step.table ?? step.name;
-  const filter = step.filter ?? { column: "batch_id", value: batch.batch_id };
+  const { table, filter } = stepTarget(step, batch);
   const { label, dot } = STEP_STATUS[step.status];
 
   return (
@@ -578,6 +583,238 @@ function BatchPipeline({ batch }: { batch: BatchDetail }) {
   );
 }
 
+// ── Expanded panel: notes ─────────────────────────────────────
+
+const NOTE_AUTHOR_KEY = "lumen-note-author";
+
+const FIELD_CLASSES =
+  "w-full rounded-md border px-2.5 py-1.5 text-sm border-zinc-200 bg-white text-zinc-800 placeholder-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:placeholder-zinc-500 dark:focus:border-zinc-500";
+
+function readSavedAuthor(): string {
+  try {
+    return localStorage.getItem(NOTE_AUTHOR_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function isSubmitKey(e: KeyboardEvent): boolean {
+  return e.key === "Enter" && (e.metaKey || e.ctrlKey);
+}
+
+function useNoteMutation<T = void>(batchId: string, fn: (arg: T) => Promise<unknown>, onDone?: () => void) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      onDone?.();
+      void queryClient.invalidateQueries({ queryKey: ["batch-notes", batchId] });
+    },
+    onError: (err) => toast(err instanceof Error ? err.message : "Couldn't save the note", "error"),
+  });
+}
+
+function NoteItem({ note, batchId }: { note: BatchNote; batchId: string }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(note.body);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  const update = useNoteMutation(batchId, (body: string) => updateBatchNote(batchId, note.id, body), () =>
+    setEditing(false),
+  );
+  const remove = useNoteMutation(batchId, () => deleteBatchNote(batchId, note.id));
+
+  const save = () => {
+    if (draft.trim() && !update.isPending) update.mutate(draft.trim());
+  };
+
+  return (
+    <li className="group py-2.5">
+      <div className="flex items-baseline gap-2 text-xs">
+        <span className="font-medium text-zinc-800 dark:text-zinc-200">{note.author}</span>
+        <span className="text-zinc-400 dark:text-zinc-500" title={formatDateTime(note.created_at)}>
+          {formatRelativeTime(note.created_at)}
+          {note.updated_at && " · edited"}
+        </span>
+        {!editing && (
+          // Hidden until hover only on devices that can hover; always shown on touch.
+          <span className="ml-auto flex gap-2 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:focus-within:opacity-100">
+            {confirmingDelete ? (
+              <>
+                <span className="text-zinc-500 dark:text-zinc-400">Delete?</span>
+                <button
+                  type="button"
+                  disabled={remove.isPending}
+                  onClick={() => remove.mutate()}
+                  className="font-medium text-red-600 hover:underline dark:text-red-400"
+                >
+                  Yes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(false)}
+                  className="text-zinc-500 hover:underline dark:text-zinc-400"
+                >
+                  No
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraft(note.body);
+                    setEditing(true);
+                  }}
+                  className="text-zinc-500 hover:text-zinc-800 hover:underline dark:text-zinc-400 dark:hover:text-zinc-200"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(true)}
+                  className="text-zinc-500 hover:text-red-600 hover:underline dark:text-zinc-400 dark:hover:text-red-400"
+                >
+                  Delete
+                </button>
+              </>
+            )}
+          </span>
+        )}
+      </div>
+
+      {editing ? (
+        <div className="mt-1.5 flex flex-col gap-2">
+          <textarea
+            autoFocus
+            rows={2}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (isSubmitKey(e)) save();
+              if (e.key === "Escape") setEditing(false);
+            }}
+            className={FIELD_CLASSES}
+          />
+          <div className="flex gap-2">
+            <Button size="sm" variant="primary" onClick={save} disabled={!draft.trim() || update.isPending}>
+              {update.isPending ? "Saving…" : "Save"}
+            </Button>
+            <Button size="sm" onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-1.5 w-fit max-w-full whitespace-pre-wrap break-words rounded-lg rounded-tl-sm bg-zinc-100 px-3 py-2 text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+          {note.body}
+        </p>
+      )}
+    </li>
+  );
+}
+
+/**
+ * Notes on a batch. `currentUser` is null until the app has users: then the
+ * author is typed in (and remembered locally). Pass the signed-in user's name
+ * once that exists and the name field goes away.
+ */
+function BatchNotes({ batch, currentUser = null }: { batch: BatchDetail; currentUser?: string | null }) {
+  const [open, setOpen] = useState(false);
+  const [author, setAuthor] = useState(readSavedAuthor);
+  const [body, setBody] = useState("");
+
+  const { data: notes, isLoading } = useQuery({
+    queryKey: ["batch-notes", batch.batch_id],
+    queryFn: ({ signal }) => listBatchNotes(batch.batch_id, signal),
+    enabled: open,
+  });
+
+  const noteAuthor = (currentUser ?? author).trim();
+  const add = useNoteMutation(batch.batch_id, (note: NewBatchNote) => addBatchNote(batch.batch_id, note), () => {
+    setBody("");
+    if (!currentUser) {
+      try {
+        localStorage.setItem(NOTE_AUTHOR_KEY, noteAuthor);
+      } catch {
+        // Not remembering the name is fine.
+      }
+    }
+  });
+
+  const canPost = !!noteAuthor && !!body.trim() && !add.isPending;
+  const post = () => {
+    if (canPost) add.mutate({ author: noteAuthor, body: body.trim() });
+  };
+
+  return (
+    <section
+      aria-label="Notes"
+      className="w-full rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/50"
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-4 py-2.5 text-left"
+      >
+        <ChevronRight
+          size={14}
+          className={`text-zinc-400 transition-transform duration-150 dark:text-zinc-500 ${open ? "rotate-90" : ""}`}
+        />
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Notes</h3>
+        <span className="rounded px-1.5 text-xs font-medium bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+          {notes?.length ?? batch.note_count}
+        </span>
+      </button>
+
+      {open && (
+        <div className="border-t px-4 pb-4 border-zinc-100 dark:border-zinc-800/60">
+          {isLoading && <p className="py-3 text-xs text-zinc-400 dark:text-zinc-500">Loading notes…</p>}
+          {notes?.length === 0 && (
+            <p className="py-3 text-xs text-zinc-400 dark:text-zinc-500">No notes yet.</p>
+          )}
+          {!!notes?.length && (
+            <ul className="max-h-72 divide-y overflow-y-auto divide-zinc-100 dark:divide-zinc-800/60">
+              {notes.map((note) => (
+                <NoteItem key={note.id} note={note} batchId={batch.batch_id} />
+              ))}
+            </ul>
+          )}
+
+          <div className="mt-3 flex flex-col gap-2">
+            {!currentUser && (
+              <input
+                type="text"
+                aria-label="Your name"
+                placeholder="Your name"
+                value={author}
+                onChange={(e) => setAuthor(e.target.value)}
+                className={`${FIELD_CLASSES} sm:w-56`}
+              />
+            )}
+            <textarea
+              aria-label="Note"
+              placeholder="Add a note…  (Ctrl/⌘+Enter to post)"
+              rows={2}
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              onKeyDown={(e) => {
+                if (isSubmitKey(e)) post();
+              }}
+              className={FIELD_CLASSES}
+            />
+            <Button size="sm" variant="primary" className="self-start" onClick={post} disabled={!canPost}>
+              {add.isPending ? "Posting…" : "Post"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ── Expanded panel ────────────────────────────────────────────
 
 function BatchPanel({
@@ -592,10 +829,13 @@ function BatchPanel({
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["batch", batchId],
     queryFn: ({ signal }) => getBatch(batchId, signal),
-    refetchInterval: (query) =>
-      query.state.data && isActiveStatus(getBatchStatus(query.state.data))
+    // Keep polling while files run, and after that while pipeline steps still run.
+    refetchInterval: (query) => {
+      const batch = query.state.data;
+      return batch && (isActiveStatus(getBatchStatus(batch)) || hasRunningStep(batch))
         ? POLL_INTERVAL_MS
-        : false,
+        : false;
+    },
   });
 
   return (
@@ -627,6 +867,7 @@ function BatchPanel({
           <BatchDetails batch={data} />
           <BatchFiles batch={data} />
           <BatchPipeline batch={data} />
+          <BatchNotes batch={data} />
         </div>
       )}
     </div>

@@ -88,6 +88,35 @@ export async function apiPost<T>(
   }
 }
 
+export async function apiPatch<T>(
+  path: string,
+  body: unknown,
+  signal?: AbortSignal,
+): Promise<T> {
+  try {
+    const response = await fetch(`${BASE_URL}${path}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal,
+    });
+    return handleResponse<T>(response);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new ApiError({
+        code: "NETWORK_ERROR",
+        message: "Request was cancelled",
+      });
+    }
+    throw new ApiError({
+      code: "NETWORK_ERROR",
+      message: "Unable to connect to the server",
+      detail: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
+
 export async function apiDelete<T = void>(
   path: string,
   signal?: AbortSignal,

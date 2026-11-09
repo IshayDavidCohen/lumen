@@ -5,8 +5,10 @@ import type {
   BatchFile,
   BatchFileCounts,
   BatchListResponse,
+  BatchNote,
   BatchSummary,
   ListBatchesParams,
+  NewBatchNote,
   PipelineBranch,
   PipelineStepStatus,
 } from "./batches";
@@ -499,8 +501,8 @@ const PIPELINES: Record<string, Record<string, string[]>> = {
   },
 };
 
-/** Mock tables keyed by run_id instead of batch_id. */
-const RUN_ID_TABLES = new Set(["TopTalkers", "Ja3Analysis"]);
+/** Mock tables keyed by batch_id instead of the default run_id. */
+const BATCH_ID_TABLES = new Set(["TopTalkers", "Ja3Analysis"]);
 
 /** Step statuses follow the batch's files: parsers run with them, analyses run after. */
 function buildPipeline(batch: BatchDetail): PipelineBranch[] {
@@ -522,13 +524,13 @@ function buildPipeline(batch: BatchDetail): PipelineBranch[] {
         status = failed > 0 && i === analyses.length - 1 ? "FAILED" : "FINISHED";
       } else if (parserStatus === "PROCESSING" && i === 0) {
         status = "PROCESSING";
+      } else if (parserStatus === "FAILED") {
+        status = "FAILED"; // nothing to analyse
       }
       return {
         name,
         status,
-        ...(RUN_ID_TABLES.has(name) && {
-          filter: { column: "run_id", value: `run-${batch.batch_id.slice(-4)}` },
-        }),
+        ...(BATCH_ID_TABLES.has(name) && { filter_by: "batch_id" as const }),
       };
     }),
   }));
@@ -598,6 +600,7 @@ function buildBatch(seed: SeedBatch, now: number): BatchDetail {
 
   const batch: BatchDetail = {
     batch_id: seed.id,
+    run_id: `run-${seed.id.slice(-4)}`,
     ingest_type: seed.type,
     title: seed.title,
     owner: seed.owner,
@@ -613,6 +616,7 @@ function buildBatch(seed: SeedBatch, now: number): BatchDetail {
     tables: seed.tables,
     files,
     pipeline: [],
+    note_count: 0,
   };
   finalize(batch, now);
   return batch;
@@ -728,11 +732,76 @@ export async function mockGetBatch(batchId: string): Promise<BatchDetail> {
   tick();
   const batch = store.find((b) => b.batch_id === batchId);
   if (!batch) throw notFound(batchId);
-  return structuredClone(batch);
+  return { ...structuredClone(batch), note_count: notes.get(batchId)?.length ?? 0 };
 }
 
 export async function mockDeleteBatch(batchId: string): Promise<void> {
   await delay(400);
   if (!store.some((b) => b.batch_id === batchId)) throw notFound(batchId);
   store = store.filter((b) => b.batch_id !== batchId);
+  notes.delete(batchId);
+}
+
+// ── Notes ─────────────────────────────────────────────────────
+
+const notes = new Map<string, BatchNote[]>([
+  [
+    "batch-0417",
+    [
+      {
+        id: "note-1",
+        batch_id: "batch-0417",
+        author: "alice",
+        body: "edge-03 and edge-09 are from the old sensor firmware, re-capture pending.",
+        created_at: iso(Date.now() - 50 * MINUTE)!,
+        updated_at: null,
+      },
+    ],
+  ],
+]);
+let nextNoteId = 2;
+
+function findNote(batchId: string, noteId: string): BatchNote {
+  const note = notes.get(batchId)?.find((n) => n.id === noteId);
+  if (!note) {
+    throw new ApiError({ code: "SERVER_ERROR", status: 404, message: "Note not found" });
+  }
+  return note;
+}
+
+export async function mockListBatchNotes(batchId: string): Promise<BatchNote[]> {
+  await delay(200);
+  return structuredClone(notes.get(batchId) ?? []);
+}
+
+export async function mockAddBatchNote(batchId: string, input: NewBatchNote): Promise<BatchNote> {
+  await delay(200);
+  const note: BatchNote = {
+    id: `note-${nextNoteId++}`,
+    batch_id: batchId,
+    author: input.author,
+    body: input.body,
+    created_at: new Date().toISOString(),
+    updated_at: null,
+  };
+  notes.set(batchId, [...(notes.get(batchId) ?? []), note]);
+  return structuredClone(note);
+}
+
+export async function mockUpdateBatchNote(
+  batchId: string,
+  noteId: string,
+  body: string,
+): Promise<BatchNote> {
+  await delay(200);
+  const note = findNote(batchId, noteId);
+  note.body = body;
+  note.updated_at = new Date().toISOString();
+  return structuredClone(note);
+}
+
+export async function mockDeleteBatchNote(batchId: string, noteId: string): Promise<void> {
+  await delay(200);
+  findNote(batchId, noteId);
+  notes.set(batchId, notes.get(batchId)!.filter((n) => n.id !== noteId));
 }

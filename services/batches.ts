@@ -1,5 +1,13 @@
-import { apiDelete, apiGet } from "./api";
-import { mockDeleteBatch, mockGetBatch, mockListBatches } from "./mockBatches";
+import { apiDelete, apiGet, apiPatch, apiPost } from "./api";
+import {
+  mockAddBatchNote,
+  mockDeleteBatch,
+  mockDeleteBatchNote,
+  mockGetBatch,
+  mockListBatches,
+  mockListBatchNotes,
+  mockUpdateBatchNote,
+} from "./mockBatches";
 import type { UploadStatus } from "@/constants/apiTypes";
 import type { BatchFilter } from "./batchStatus";
 
@@ -45,8 +53,8 @@ export interface PipelineStep {
   status: PipelineStepStatus;
   /** Table the step writes to; defaults to `name` */
   table?: string;
-  /** Column/value that selects this batch's rows; defaults to batch_id = <batch_id> */
-  filter?: { column: string; value: string | number };
+  /** Column that selects this batch's rows in `table`; defaults to run_id */
+  filter_by?: "run_id" | "batch_id";
 }
 
 /** One parser fed by the batch's files, and the analyses fed by that parser's output. */
@@ -56,6 +64,8 @@ export interface PipelineBranch {
 }
 
 export interface BatchDetail extends BatchSummary {
+  /** The pipeline run that processed this batch; pipeline tables are filtered by it by default */
+  run_id: string;
   /** Where the batch came from, e.g. "Web upload" or an API key name */
   source: string | null;
   parser: string | null;
@@ -64,6 +74,23 @@ export interface BatchDetail extends BatchSummary {
   files: BatchFile[];
   /** The pipeline submitted with this batch */
   pipeline: PipelineBranch[];
+  note_count: number;
+}
+
+export interface BatchNote {
+  id: string;
+  batch_id: string;
+  author: string;
+  body: string;
+  created_at: string;
+  /** null until the note is edited */
+  updated_at: string | null;
+}
+
+export interface NewBatchNote {
+  /** Typed by the user for now; once users exist the backend can take it from the session */
+  author: string;
+  body: string;
 }
 
 export interface BatchListResponse {
@@ -89,12 +116,13 @@ export function rowsWhereSql(table: string, where: Record<string, string | numbe
   return `SELECT * FROM ${table} WHERE ${conditions.join(" AND ")};`;
 }
 
-/** SQL selecting a table's rows from one batch, optionally narrowed to one iteration. */
-export function batchRowsSql(table: string, batchId: string, iteration?: number): string {
-  return rowsWhereSql(table, {
-    batch_id: batchId,
-    ...(iteration !== undefined && { iteration }),
-  });
+/** The table a pipeline step writes to, and the column/value that selects this batch's rows in it. */
+export function stepTarget(step: PipelineStep, batch: Pick<BatchDetail, "batch_id" | "run_id">) {
+  const column = step.filter_by ?? "run_id";
+  return {
+    table: step.table ?? step.name,
+    filter: { column, value: batch[column] },
+  };
 }
 
 /** Data page URL that opens `table` and runs `sql` against it on arrival. */
@@ -144,4 +172,36 @@ export async function getBatch(
 export async function deleteBatch(batchId: string): Promise<void> {
   if (USE_MOCK) return mockDeleteBatch(batchId);
   return apiDelete(`/batches/${encodeURIComponent(batchId)}`);
+}
+
+// ── Notes ─────────────────────────────────────────────────────
+
+function notesPath(batchId: string, noteId?: string): string {
+  const base = `/batches/${encodeURIComponent(batchId)}/notes`;
+  return noteId ? `${base}/${encodeURIComponent(noteId)}` : base;
+}
+
+/** A batch's notes, oldest first. */
+export async function listBatchNotes(batchId: string, signal?: AbortSignal): Promise<BatchNote[]> {
+  if (USE_MOCK) return mockListBatchNotes(batchId);
+  return apiGet<BatchNote[]>(notesPath(batchId), signal);
+}
+
+export async function addBatchNote(batchId: string, note: NewBatchNote): Promise<BatchNote> {
+  if (USE_MOCK) return mockAddBatchNote(batchId, note);
+  return apiPost<BatchNote>(notesPath(batchId), note);
+}
+
+export async function updateBatchNote(
+  batchId: string,
+  noteId: string,
+  body: string,
+): Promise<BatchNote> {
+  if (USE_MOCK) return mockUpdateBatchNote(batchId, noteId, body);
+  return apiPatch<BatchNote>(notesPath(batchId, noteId), { body });
+}
+
+export async function deleteBatchNote(batchId: string, noteId: string): Promise<void> {
+  if (USE_MOCK) return mockDeleteBatchNote(batchId, noteId);
+  return apiDelete(notesPath(batchId, noteId));
 }
