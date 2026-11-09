@@ -30,6 +30,14 @@ function pad(n: number, width = 2): string {
 
 // ── Seed data ─────────────────────────────────────────────────
 
+interface SeedFile {
+  filename: string;
+  /** Which attempt at parsing this file the status belongs to (1 = first try) */
+  iteration: number;
+  error?: string;
+  status: UploadStatus;
+}
+
 interface SeedBatch {
   id: string;
   type: string;
@@ -41,20 +49,24 @@ interface SeedBatch {
   source: string;
   parser: string;
   tables: string[];
-  fileName: (index: number) => string;
   baseBytes: number;
-  /** One letter per file: P parsed, R processing, Q queued, F failed */
-  statuses: string;
-  errors?: Record<number, string>;
-  allFilesError?: string;
+  files: SeedFile[];
 }
 
-const STATUS_CODES: Record<string, UploadStatus> = {
-  P: "PARSED",
-  R: "PROCESSING",
-  Q: "QUEUED",
-  F: "FAILED",
-};
+/** `count` first-attempt files that all share one status (and error, if any). */
+function sameFiles(
+  count: number,
+  name: (n: number) => string,
+  status: UploadStatus = "PARSED",
+  error?: string,
+): SeedFile[] {
+  return Array.from({ length: count }, (_, i) => ({
+    filename: name(i + 1),
+    iteration: 1,
+    status,
+    ...(error !== undefined && { error }),
+  }));
+}
 
 const SEEDS: SeedBatch[] = [
   {
@@ -66,9 +78,8 @@ const SEEDS: SeedBatch[] = [
     source: "Web upload",
     parser: "parquet-loader 1.4.0",
     tables: ["flows", "flow_summary"],
-    fileName: (i) => `flows_part-${pad(i, 4)}.parquet`,
     baseBytes: 380 * MB,
-    statuses: "QQQQ",
+    files: sameFiles(4, (n) => `flows_part-${pad(n, 4)}.parquet`, "QUEUED"),
   },
   {
     id: "batch-0418",
@@ -79,9 +90,13 @@ const SEEDS: SeedBatch[] = [
     source: "Web upload",
     parser: "pcap-parser 2.3.1",
     tables: ["packets", "connections", "dns_queries", "http_requests"],
-    fileName: (i) => `dc-east-${pad(i)}.pcap`,
     baseBytes: 140 * MB,
-    statuses: "PPPPPPPPPPPPRRQ",
+    files: [
+      ...sameFiles(12, (n) => `dc-east-${pad(n)}.pcap`),
+      { filename: "dc-east-13.pcap", iteration: 2, status: "PROCESSING" },
+      { filename: "dc-east-14.pcap", iteration: 1, status: "PROCESSING" },
+      { filename: "dc-east-15.pcap", iteration: 1, status: "QUEUED" },
+    ],
   },
   {
     id: "batch-0417",
@@ -93,13 +108,32 @@ const SEEDS: SeedBatch[] = [
     source: "API key · ci-nightly",
     parser: "pcap-parser 2.3.1",
     tables: ["packets", "connections", "dns_queries", "http_requests"],
-    fileName: (i) => `edge-${pad(i)}.pcap`,
     baseBytes: 160 * MB,
-    statuses: "PPFPPPPPFPPPP",
-    errors: {
-      2: "Truncated packet at offset 0x3F2A10. The capture ends mid-frame.",
-      8: "Unsupported link-layer type (DLT 228).",
-    },
+    files: [
+      { filename: "edge-01.pcap", iteration: 1, status: "PARSED" },
+      { filename: "edge-02.pcap", iteration: 1, status: "PARSED" },
+      {
+        filename: "edge-03.pcap",
+        iteration: 3,
+        status: "FAILED",
+        error: "Truncated packet at offset 0x3F2A10. The capture ends mid-frame.",
+      },
+      { filename: "edge-04.pcap", iteration: 1, status: "PARSED" },
+      { filename: "edge-05.pcap", iteration: 2, status: "PARSED" },
+      { filename: "edge-06.pcap", iteration: 1, status: "PARSED" },
+      { filename: "edge-07.pcap", iteration: 1, status: "PARSED" },
+      { filename: "edge-08.pcap", iteration: 1, status: "PARSED" },
+      {
+        filename: "edge-09.pcap",
+        iteration: 1,
+        status: "FAILED",
+        error: "Unsupported link-layer type (DLT 228).",
+      },
+      { filename: "edge-10.pcap", iteration: 1, status: "PARSED" },
+      { filename: "edge-11.pcap", iteration: 1, status: "PARSED" },
+      { filename: "edge-12.pcap", iteration: 1, status: "PARSED" },
+      { filename: "edge-13.pcap", iteration: 1, status: "PARSED" },
+    ],
   },
   {
     id: "batch-0416",
@@ -111,9 +145,8 @@ const SEEDS: SeedBatch[] = [
     source: "Web upload",
     parser: "csv-loader 1.9.0",
     tables: ["events", "metrics"],
-    fileName: (i) => `events_${pad(i)}.csv`,
     baseBytes: 24 * MB,
-    statuses: "PPPPPPPP",
+    files: sameFiles(8, (n) => `events_${pad(n)}.csv`),
   },
   {
     id: "batch-0415",
@@ -125,10 +158,13 @@ const SEEDS: SeedBatch[] = [
     source: "API key · siem-export",
     parser: "json-loader 1.2.0",
     tables: [],
-    fileName: (i) => `alerts_${pad(i)}.json`,
     baseBytes: 12 * MB,
-    statuses: "FFFFFF",
-    allFilesError: 'Schema mismatch: field "ts" expected timestamp, got string.',
+    files: sameFiles(
+      6,
+      (n) => `alerts_${pad(n)}.json`,
+      "FAILED",
+      'Schema mismatch: field "ts" expected timestamp, got string.',
+    ),
   },
   {
     id: "batch-0414",
@@ -140,9 +176,8 @@ const SEEDS: SeedBatch[] = [
     source: "Web upload",
     parser: "parquet-loader 1.4.0",
     tables: ["flows", "flow_summary"],
-    fileName: (i) => `core-router-${pad(i, 4)}.parquet`,
     baseBytes: 510 * MB,
-    statuses: "PPPPPPPPPPPP",
+    files: sameFiles(12, (n) => `core-router-${pad(n, 4)}.parquet`),
   },
   {
     id: "batch-0413",
@@ -154,10 +189,23 @@ const SEEDS: SeedBatch[] = [
     source: "API key · ci-nightly",
     parser: "pcap-parser 2.3.1",
     tables: ["packets", "connections"],
-    fileName: (i) => `branch-${pad(i)}.pcap`,
     baseBytes: 95 * MB,
-    statuses: "PPPPPFPPP",
-    errors: { 5: "Corrupt frame at offset 0x1A0044." },
+    files: [
+      { filename: "branch-01.pcap", iteration: 1, status: "PARSED" },
+      { filename: "branch-02.pcap", iteration: 1, status: "PARSED" },
+      { filename: "branch-03.pcap", iteration: 1, status: "PARSED" },
+      { filename: "branch-04.pcap", iteration: 1, status: "PARSED" },
+      { filename: "branch-05.pcap", iteration: 1, status: "PARSED" },
+      {
+        filename: "branch-06.pcap",
+        iteration: 2,
+        status: "FAILED",
+        error: "Corrupt frame at offset 0x1A0044.",
+      },
+      { filename: "branch-07.pcap", iteration: 1, status: "PARSED" },
+      { filename: "branch-08.pcap", iteration: 1, status: "PARSED" },
+      { filename: "branch-09.pcap", iteration: 1, status: "PARSED" },
+    ],
   },
   {
     id: "batch-0412",
@@ -169,9 +217,8 @@ const SEEDS: SeedBatch[] = [
     source: "Web upload",
     parser: "csv-loader 1.9.0",
     tables: ["events", "metrics"],
-    fileName: (i) => `metrics_oct_${pad(i)}.csv`,
     baseBytes: 31 * MB,
-    statuses: "PPPPPPPPPPPP",
+    files: sameFiles(12, (n) => `metrics_oct_${pad(n)}.csv`),
   },
   {
     id: "batch-0411",
@@ -183,9 +230,8 @@ const SEEDS: SeedBatch[] = [
     source: "API key · siem-export",
     parser: "parquet-loader 1.4.0",
     tables: ["flows"],
-    fileName: (i) => `wan-${pad(i, 4)}.parquet`,
     baseBytes: 220 * MB,
-    statuses: "PPPPPPPP",
+    files: sameFiles(8, (n) => `wan-${pad(n, 4)}.parquet`),
   },
   {
     id: "batch-0410",
@@ -197,9 +243,8 @@ const SEEDS: SeedBatch[] = [
     source: "Web upload",
     parser: "pcap-parser 2.3.1",
     tables: ["packets", "connections", "dns_queries"],
-    fileName: (i) => `dmz-${pad(i)}.pcap`,
     baseBytes: 480 * MB,
-    statuses: "PPPPPPPPPPPPPPPP",
+    files: sameFiles(16, (n) => `dmz-${pad(n)}.pcap`),
   },
   {
     id: "batch-0409",
@@ -211,9 +256,8 @@ const SEEDS: SeedBatch[] = [
     source: "API key · ci-nightly",
     parser: "json-loader 1.2.0",
     tables: ["events"],
-    fileName: (i) => `corr_${pad(i)}.json`,
     baseBytes: 8 * MB,
-    statuses: "PPPP",
+    files: sameFiles(4, (n) => `corr_${pad(n)}.json`),
   },
   {
     id: "batch-0408",
@@ -225,10 +269,18 @@ const SEEDS: SeedBatch[] = [
     source: "Web upload",
     parser: "parquet-loader 1.4.0",
     tables: ["flows", "flow_summary"],
-    fileName: (i) => `flows_${pad(i, 4)}.parquet`,
     baseBytes: 290 * MB,
-    statuses: "PPPPPPPFPP",
-    errors: { 7: "Unexpected EOF reading flow record." },
+    files: [
+      ...sameFiles(7, (n) => `flows_${pad(n, 4)}.parquet`),
+      {
+        filename: "flows_0008.parquet",
+        iteration: 1,
+        status: "FAILED",
+        error: "Unexpected EOF reading flow record.",
+      },
+      { filename: "flows_0009.parquet", iteration: 1, status: "PARSED" },
+      { filename: "flows_0010.parquet", iteration: 1, status: "PARSED" },
+    ],
   },
   {
     id: "batch-0407",
@@ -240,9 +292,8 @@ const SEEDS: SeedBatch[] = [
     source: "API key · siem-export",
     parser: "pcap-parser 2.3.1",
     tables: ["packets", "connections", "http_requests"],
-    fileName: (i) => `spine-${pad(i)}.pcap`,
     baseBytes: 320 * MB,
-    statuses: "PPPPPPPPPPPP",
+    files: sameFiles(12, (n) => `spine-${pad(n)}.pcap`),
   },
   {
     id: "batch-0406",
@@ -254,9 +305,8 @@ const SEEDS: SeedBatch[] = [
     source: "Web upload",
     parser: "csv-loader 1.9.0",
     tables: ["events", "metrics"],
-    fileName: (i) => `sep_events_${pad(i)}.csv`,
     baseBytes: 19 * MB,
-    statuses: "PPPPPPPP",
+    files: sameFiles(8, (n) => `sep_events_${pad(n)}.csv`),
   },
   {
     id: "batch-0405",
@@ -268,10 +318,20 @@ const SEEDS: SeedBatch[] = [
     source: "API key · ci-nightly",
     parser: "parquet-loader 1.4.0",
     tables: ["flows"],
-    fileName: (i) => `peering-${pad(i, 4)}.parquet`,
     baseBytes: 410 * MB,
-    statuses: "PPPPPPFPPPP",
-    errors: { 6: "Checksum mismatch on row group 3." },
+    files: [
+      ...sameFiles(6, (n) => `peering-${pad(n, 4)}.parquet`),
+      {
+        filename: "peering-0007.parquet",
+        iteration: 2,
+        status: "FAILED",
+        error: "Checksum mismatch on row group 3.",
+      },
+      { filename: "peering-0008.parquet", iteration: 1, status: "PARSED" },
+      { filename: "peering-0009.parquet", iteration: 1, status: "PARSED" },
+      { filename: "peering-0010.parquet", iteration: 1, status: "PARSED" },
+      { filename: "peering-0011.parquet", iteration: 1, status: "PARSED" },
+    ],
   },
   {
     id: "batch-0404",
@@ -283,10 +343,13 @@ const SEEDS: SeedBatch[] = [
     source: "Web upload",
     parser: "pcap-parser 2.3.1",
     tables: ["packets"],
-    fileName: (i) => `guest-vlan-${pad(i)}.pcap`,
     baseBytes: 55 * MB,
-    statuses: "FFFFFF",
-    allFilesError: "Link-layer type DLT_NULL not supported.",
+    files: sameFiles(
+      6,
+      (n) => `guest-vlan-${pad(n)}.pcap`,
+      "FAILED",
+      "Link-layer type DLT_NULL not supported.",
+    ),
   },
   {
     id: "batch-0403",
@@ -298,9 +361,8 @@ const SEEDS: SeedBatch[] = [
     source: "API key · siem-export",
     parser: "json-loader 1.2.0",
     tables: ["events"],
-    fileName: (i) => `ti_feed_${pad(i)}.json`,
     baseBytes: 14 * MB,
-    statuses: "PPPPPPPP",
+    files: sameFiles(8, (n) => `ti_feed_${pad(n)}.json`),
   },
   {
     id: "batch-0402",
@@ -312,9 +374,8 @@ const SEEDS: SeedBatch[] = [
     source: "Web upload",
     parser: "parquet-loader 1.4.0",
     tables: ["flows", "flow_summary"],
-    fileName: (i) => `daily-${pad(i, 4)}.parquet`,
     baseBytes: 650 * MB,
-    statuses: "PPPPPPPPPPPPPPPP",
+    files: sameFiles(16, (n) => `daily-${pad(n, 4)}.parquet`),
   },
   {
     id: "batch-0401",
@@ -326,13 +387,31 @@ const SEEDS: SeedBatch[] = [
     source: "API key · ci-nightly",
     parser: "pcap-parser 2.3.1",
     tables: ["packets", "connections"],
-    fileName: (i) => `vpn-gw-${pad(i)}.pcap`,
     baseBytes: 175 * MB,
-    statuses: "PPPFPPPPPFPP",
-    errors: {
-      3: "Truncated packet at offset 0x8B1200.",
-      9: "Unsupported encapsulation type 0xFE.",
-    },
+    files: [
+      { filename: "vpn-gw-01.pcap", iteration: 1, status: "PARSED" },
+      { filename: "vpn-gw-02.pcap", iteration: 1, status: "PARSED" },
+      { filename: "vpn-gw-03.pcap", iteration: 1, status: "PARSED" },
+      {
+        filename: "vpn-gw-04.pcap",
+        iteration: 1,
+        status: "FAILED",
+        error: "Truncated packet at offset 0x8B1200.",
+      },
+      { filename: "vpn-gw-05.pcap", iteration: 1, status: "PARSED" },
+      { filename: "vpn-gw-06.pcap", iteration: 2, status: "PARSED" },
+      { filename: "vpn-gw-07.pcap", iteration: 1, status: "PARSED" },
+      { filename: "vpn-gw-08.pcap", iteration: 1, status: "PARSED" },
+      { filename: "vpn-gw-09.pcap", iteration: 1, status: "PARSED" },
+      {
+        filename: "vpn-gw-10.pcap",
+        iteration: 3,
+        status: "FAILED",
+        error: "Unsupported encapsulation type 0xFE.",
+      },
+      { filename: "vpn-gw-11.pcap", iteration: 1, status: "PARSED" },
+      { filename: "vpn-gw-12.pcap", iteration: 1, status: "PARSED" },
+    ],
   },
   {
     id: "batch-0400",
@@ -344,9 +423,8 @@ const SEEDS: SeedBatch[] = [
     source: "Web upload",
     parser: "csv-loader 1.9.0",
     tables: ["metrics"],
-    fileName: (i) => `aug_metrics_${pad(i)}.csv`,
     baseBytes: 27 * MB,
-    statuses: "PPPPPP",
+    files: sameFiles(6, (n) => `aug_metrics_${pad(n)}.csv`),
   },
   {
     id: "batch-0399",
@@ -358,9 +436,8 @@ const SEEDS: SeedBatch[] = [
     source: "API key · siem-export",
     parser: "parquet-loader 1.4.0",
     tables: ["flows", "flow_summary"],
-    fileName: (i) => `spine-tel-${pad(i, 4)}.parquet`,
     baseBytes: 340 * MB,
-    statuses: "PPPPPPPPPP",
+    files: sameFiles(10, (n) => `spine-tel-${pad(n, 4)}.parquet`),
   },
   {
     id: "batch-0398",
@@ -372,9 +449,8 @@ const SEEDS: SeedBatch[] = [
     source: "Web upload",
     parser: "pcap-parser 2.3.1",
     tables: ["packets", "connections", "http_requests"],
-    fileName: (i) => `egress-fw-${pad(i)}.pcap`,
     baseBytes: 260 * MB,
-    statuses: "PPPPPPPPPPPPPPPP",
+    files: sameFiles(16, (n) => `egress-fw-${pad(n)}.pcap`),
   },
   {
     id: "batch-0397",
@@ -386,10 +462,13 @@ const SEEDS: SeedBatch[] = [
     source: "API key · ci-nightly",
     parser: "json-loader 1.2.0",
     tables: [],
-    fileName: (i) => `dump_${pad(i)}.json`,
     baseBytes: 5 * MB,
-    statuses: "FFFFFF",
-    allFilesError: 'Missing required field "event_type".',
+    files: sameFiles(
+      6,
+      (n) => `dump_${pad(n)}.json`,
+      "FAILED",
+      'Missing required field "event_type".',
+    ),
   },
 ];
 
@@ -423,15 +502,14 @@ function finalize(batch: BatchDetail, now: number): void {
 
 function buildBatch(seed: SeedBatch, now: number): BatchDetail {
   const created = now - seed.minutesAgo * MINUTE;
-  const codes = seed.statuses.split("");
-  const started = codes.some((c) => c !== "Q") ? created + 20_000 : null;
+  const started = seed.files.some((f) => f.status !== "QUEUED") ? created + 20_000 : null;
   const finished =
     seed.durationMin !== undefined && started !== null
       ? started + seed.durationMin * MINUTE
       : null;
 
-  const files: BatchFile[] = codes.map((code, i) => {
-    const status = STATUS_CODES[code] ?? "QUEUED";
+  const files: BatchFile[] = seed.files.map((seedFile, i) => {
+    const { filename, iteration, status } = seedFile;
     const size = Math.round(seed.baseBytes * (1 + ((i * 37) % 23) / 20));
     const fileStart = started !== null && status !== "QUEUED" ? started + i * 30_000 : null;
     const done = status === "PARSED" || status === "FAILED";
@@ -443,15 +521,13 @@ function buildBatch(seed: SeedBatch, now: number): BatchDetail {
 
     return {
       job_id: `job_${seed.id.slice(-4)}_${pad(i + 1, 3)}`,
-      filename: seed.fileName(i + 1),
+      filename,
+      iteration,
       size_bytes: size,
       status,
       progress: status === "PROCESSING" ? (i % 2 ? 35 : 70) : null,
       rows_written: rows,
-      error:
-        status === "FAILED"
-          ? (seed.allFilesError ?? seed.errors?.[i] ?? "Parser exited with an error.")
-          : null,
+      error: status === "FAILED" ? (seedFile.error ?? "Parser exited with an error.") : null,
       started_at: iso(fileStart),
       finished_at: iso(fileEnd),
     };
@@ -460,8 +536,8 @@ function buildBatch(seed: SeedBatch, now: number): BatchDetail {
   const batch: BatchDetail = {
     batch_id: seed.id,
     ingest_type: seed.type,
-    title: seed.title ?? null,
-    owner: seed.owner ?? null,
+    title: seed.title,
+    owner: seed.owner,
     created_at: new Date(created).toISOString(),
     started_at: iso(started),
     finished_at: iso(finished),

@@ -441,6 +441,14 @@ function FileRow({
         <div className="flex flex-col gap-2 bg-zinc-50 py-2 pl-11 pr-4 text-xs dark:bg-zinc-800/40">
           <dl className="flex flex-col">
             <DetailRow label="Job ID" mono>{file.job_id}</DetailRow>
+            <DetailRow label="Iteration">
+              {file.iteration}
+              {file.iteration > 1 && (
+                <span className="text-zinc-500 dark:text-zinc-400">
+                  {" "}· retried {file.iteration - 1}×
+                </span>
+              )}
+            </DetailRow>
             {file.status === "PROCESSING" && file.progress !== null && (
               <DetailRow label="Progress">{file.progress}%</DetailRow>
             )}

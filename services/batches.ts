@@ -25,6 +25,8 @@ export interface BatchSummary {
 export interface BatchFile {
   job_id: string;
   filename: string;
+  /** Parse attempt this status belongs to; 1 is the first try, higher means retried */
+  iteration: number;
   size_bytes: number;
   status: UploadStatus;
   /** 0–100 while PROCESSING, otherwise null */
