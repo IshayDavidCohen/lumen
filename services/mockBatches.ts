@@ -62,7 +62,6 @@ interface SeedBatch {
   durationMin?: number;
   source: string;
   parser: string;
-  tables: string[];
   baseBytes: number;
   files: SeedFile[];
 }
@@ -91,7 +90,6 @@ const SEEDS: SeedBatch[] = [
     minutesAgo: 1,
     source: "Web upload",
     parser: "parquet-loader 1.4.0",
-    tables: ["flows", "flow_summary"],
     baseBytes: 380 * MB,
     files: sameFiles(4, (n) => `flows_part-${pad(n, 4)}.parquet`, "QUEUED"),
   },
@@ -103,7 +101,6 @@ const SEEDS: SeedBatch[] = [
     minutesAgo: 4,
     source: "Web upload",
     parser: "pcap-parser 2.3.1",
-    tables: ["packets", "connections", "dns_queries", "http_requests"],
     baseBytes: 140 * MB,
     files: [
       ...sameFiles(12, (n) => `dc-east-${pad(n)}.pcap`),
@@ -121,7 +118,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 21,
     source: "API key · ci-nightly",
     parser: "pcap-parser 2.3.1",
-    tables: ["packets", "connections", "dns_queries", "http_requests"],
     baseBytes: 160 * MB,
     files: [
       { filename: "edge-01.pcap", iteration: 0, status: "PARSED" },
@@ -158,7 +154,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 3,
     source: "Web upload",
     parser: "csv-loader 1.9.0",
-    tables: ["events", "metrics"],
     baseBytes: 24 * MB,
     files: sameFiles(8, (n) => `events_${pad(n)}.csv`),
   },
@@ -171,7 +166,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 1,
     source: "API key · siem-export",
     parser: "json-loader 1.2.0",
-    tables: [],
     baseBytes: 12 * MB,
     files: sameFiles(
       6,
@@ -189,7 +183,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 8,
     source: "Web upload",
     parser: "parquet-loader 1.4.0",
-    tables: ["flows", "flow_summary"],
     baseBytes: 510 * MB,
     files: sameFiles(12, (n) => `core-router-${pad(n, 4)}.parquet`),
   },
@@ -202,7 +195,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 14,
     source: "API key · ci-nightly",
     parser: "pcap-parser 2.3.1",
-    tables: ["packets", "connections"],
     baseBytes: 95 * MB,
     files: [
       { filename: "branch-01.pcap", iteration: 0, status: "PARSED" },
@@ -230,7 +222,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 5,
     source: "Web upload",
     parser: "csv-loader 1.9.0",
-    tables: ["events", "metrics"],
     baseBytes: 31 * MB,
     files: sameFiles(12, (n) => `metrics_oct_${pad(n)}.csv`),
   },
@@ -243,7 +234,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 11,
     source: "API key · siem-export",
     parser: "parquet-loader 1.4.0",
-    tables: ["flows"],
     baseBytes: 220 * MB,
     files: sameFiles(8, (n) => `wan-${pad(n, 4)}.parquet`),
   },
@@ -256,7 +246,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 30,
     source: "Web upload",
     parser: "pcap-parser 2.3.1",
-    tables: ["packets", "connections", "dns_queries"],
     baseBytes: 480 * MB,
     files: sameFiles(16, (n) => `dmz-${pad(n)}.pcap`),
   },
@@ -269,7 +258,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 2,
     source: "API key · ci-nightly",
     parser: "json-loader 1.2.0",
-    tables: ["events"],
     baseBytes: 8 * MB,
     files: sameFiles(4, (n) => `corr_${pad(n)}.json`),
   },
@@ -282,7 +270,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 7,
     source: "Web upload",
     parser: "parquet-loader 1.4.0",
-    tables: ["flows", "flow_summary"],
     baseBytes: 290 * MB,
     files: [
       ...sameFiles(7, (n) => `flows_${pad(n, 4)}.parquet`),
@@ -305,7 +292,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 18,
     source: "API key · siem-export",
     parser: "pcap-parser 2.3.1",
-    tables: ["packets", "connections", "http_requests"],
     baseBytes: 320 * MB,
     files: sameFiles(12, (n) => `spine-${pad(n)}.pcap`),
   },
@@ -318,7 +304,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 4,
     source: "Web upload",
     parser: "csv-loader 1.9.0",
-    tables: ["events", "metrics"],
     baseBytes: 19 * MB,
     files: sameFiles(8, (n) => `sep_events_${pad(n)}.csv`),
   },
@@ -331,7 +316,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 9,
     source: "API key · ci-nightly",
     parser: "parquet-loader 1.4.0",
-    tables: ["flows"],
     baseBytes: 410 * MB,
     files: [
       ...sameFiles(6, (n) => `peering-${pad(n, 4)}.parquet`),
@@ -356,7 +340,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 6,
     source: "Web upload",
     parser: "pcap-parser 2.3.1",
-    tables: ["packets"],
     baseBytes: 55 * MB,
     files: sameFiles(
       6,
@@ -374,7 +357,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 3,
     source: "API key · siem-export",
     parser: "json-loader 1.2.0",
-    tables: ["events"],
     baseBytes: 14 * MB,
     files: sameFiles(8, (n) => `ti_feed_${pad(n)}.json`),
   },
@@ -387,7 +369,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 12,
     source: "Web upload",
     parser: "parquet-loader 1.4.0",
-    tables: ["flows", "flow_summary"],
     baseBytes: 650 * MB,
     files: sameFiles(16, (n) => `daily-${pad(n, 4)}.parquet`),
   },
@@ -400,7 +381,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 22,
     source: "API key · ci-nightly",
     parser: "pcap-parser 2.3.1",
-    tables: ["packets", "connections"],
     baseBytes: 175 * MB,
     files: [
       { filename: "vpn-gw-01.pcap", iteration: 0, status: "PARSED" },
@@ -436,7 +416,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 5,
     source: "Web upload",
     parser: "csv-loader 1.9.0",
-    tables: ["metrics"],
     baseBytes: 27 * MB,
     files: sameFiles(6, (n) => `aug_metrics_${pad(n)}.csv`),
   },
@@ -449,7 +428,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 10,
     source: "API key · siem-export",
     parser: "parquet-loader 1.4.0",
-    tables: ["flows", "flow_summary"],
     baseBytes: 340 * MB,
     files: sameFiles(10, (n) => `spine-tel-${pad(n, 4)}.parquet`),
   },
@@ -462,7 +440,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 16,
     source: "Web upload",
     parser: "pcap-parser 2.3.1",
-    tables: ["packets", "connections", "http_requests"],
     baseBytes: 260 * MB,
     files: sameFiles(16, (n) => `egress-fw-${pad(n)}.pcap`),
   },
@@ -475,7 +452,6 @@ const SEEDS: SeedBatch[] = [
     durationMin: 1,
     source: "API key · ci-nightly",
     parser: "json-loader 1.2.0",
-    tables: [],
     baseBytes: 5 * MB,
     files: sameFiles(
       6,
@@ -499,6 +475,13 @@ const PIPELINES: Record<string, Record<string, string[]>> = {
     CsvParser: ["EventAnalysis", "MetricsAnalysis"],
     JsonParser: ["AlertCorrelation"],
   },
+};
+
+/** Graphs generated after an analysis finishes, keyed by analysis. */
+const GRAPHS: Record<string, string[]> = {
+  ConnectionAnalysis: ["ConnectionsOverTime", "TopPorts"],
+  FlowSummary: ["FlowVolume"],
+  EventAnalysis: ["EventTimeline"],
 };
 
 /** Mock tables keyed by batch_id instead of the default run_id. */
@@ -527,10 +510,16 @@ function buildPipeline(batch: BatchDetail): PipelineBranch[] {
       } else if (parserStatus === "FAILED") {
         status = "FAILED"; // nothing to analyse
       }
+      // Graphs follow their analysis: done when it's done, failed when it failed.
+      const graphStatus: PipelineStepStatus =
+        status === "FINISHED" || status === "FAILED" ? status : "QUEUED";
       return {
         name,
         status,
         ...(BATCH_ID_TABLES.has(name) && { filter_by: "batch_id" as const }),
+        ...(GRAPHS[name] && {
+          graphs: GRAPHS[name].map((graph) => ({ name: graph, status: graphStatus })),
+        }),
       };
     }),
   }));
@@ -613,7 +602,6 @@ function buildBatch(seed: SeedBatch, now: number): BatchDetail {
     source: seed.source,
     parser: seed.parser,
     rows_written: null,
-    tables: seed.tables,
     files,
     pipeline: [],
     note_count: 0,
@@ -774,6 +762,11 @@ export async function mockRetryFailedFiles(batchId: string): Promise<void> {
   }
   batch.finished_at = null;
   finalize(batch, Date.now());
+}
+
+/** No server to zip graphs in mock mode; download a placeholder text file instead. */
+export function mockBatchGraphsUrl(batchId: string): string {
+  return `data:text/plain;charset=utf-8,${encodeURIComponent(`Mock graphs for ${batchId}`)}`;
 }
 
 export async function mockUpdateBatchTitle(batchId: string, title: string | null): Promise<void> {

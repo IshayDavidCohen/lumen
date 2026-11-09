@@ -1,14 +1,22 @@
 import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryKey,
+} from "@tanstack/react-query";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import {
+  BarChart3,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
   CircleStop,
   Download,
+  ImageDown,
   Link2,
   Pencil,
   RefreshCw,
@@ -20,6 +28,7 @@ import {
 } from "lucide-react";
 import {
   addBatchNote,
+  batchGraphsUrl,
   cancelBatch,
   dataQueryPath,
   deleteBatch,
@@ -39,6 +48,7 @@ import {
   type BatchNote,
   type BatchSummary,
   type NewBatchNote,
+  type PipelineGraph,
   type PipelineStep,
   type PipelineStepStatus,
 } from "@/services/batches";
@@ -341,22 +351,39 @@ const FILE_CSV_COLUMNS: Column[] = [
   "finished_at",
 ].map((name) => ({ name, type: "string", nullable_pct: 0 }));
 
-/** Runs a batch action, then refreshes the batch and the list. */
-function useBatchAction<T = void>(
-  batchId: string,
+/** A mutation that refreshes the given queries when it succeeds and toasts when it fails. */
+function useRefreshingMutation<T = void>(
   fn: (arg: T) => Promise<unknown>,
-  successMessage: string,
+  options: {
+    invalidate: QueryKey[];
+    errorMessage: string;
+    successMessage?: string;
+    onDone?: () => void;
+  },
 ) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   return useMutation({
     mutationFn: fn,
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["batch", batchId] });
-      void queryClient.invalidateQueries({ queryKey: ["batches"] });
-      toast(successMessage, "success");
+      options.onDone?.();
+      for (const queryKey of options.invalidate) void queryClient.invalidateQueries({ queryKey });
+      if (options.successMessage) toast(options.successMessage, "success");
     },
-    onError: (err) => toast(err instanceof Error ? err.message : "Action failed", "error"),
+    onError: (err) => toast(err instanceof Error ? err.message : options.errorMessage, "error"),
+  });
+}
+
+/** Runs a batch action, then refreshes the batch and the list. */
+function useBatchAction<T = void>(
+  batchId: string,
+  fn: (arg: T) => Promise<unknown>,
+  successMessage: string,
+) {
+  return useRefreshingMutation(fn, {
+    invalidate: [["batch", batchId], ["batches"]],
+    errorMessage: "Action failed",
+    successMessage,
   });
 }
 
@@ -479,8 +506,16 @@ function BatchActions({
       "text/csv",
     );
 
+  // The server names the archive (Content-Disposition), so no filename is set here.
+  const downloadGraphs = () => {
+    const link = document.createElement("a");
+    link.href = batchGraphsUrl(batch.batch_id);
+    link.download = "";
+    link.click();
+  };
+
   return (
-    <aside aria-label="Batch actions" className="flex w-full flex-col gap-2 sm:w-40 sm:shrink-0">
+    <aside aria-label="Batch actions" className="flex w-full flex-col gap-2 sm:w-44 sm:shrink-0">
       <h3 className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Actions</h3>
       <Button className={ACTION_CLASSES} onClick={() => void share()}>
         <Link2 size={14} />
@@ -490,6 +525,12 @@ function BatchActions({
         <Download size={14} />
         Export file list
       </Button>
+      {hasFinishedGraph(batch) && (
+        <Button className={ACTION_CLASSES} onClick={downloadGraphs}>
+          <ImageDown size={14} />
+          Export graphs
+        </Button>
+      )}
       <EditTitleAction batch={batch} />
       {failed > 0 && (
         <Button className={ACTION_CLASSES} onClick={() => retry.mutate()} disabled={retry.isPending}>
@@ -699,7 +740,40 @@ const STEP_STATUS: Record<PipelineStepStatus, { label: string; dot: string }> = 
 
 function hasRunningStep(batch: BatchDetail): boolean {
   return batch.pipeline.some(({ parser, analyses }) =>
-    [parser, ...analyses].some((s) => s.status === "QUEUED" || s.status === "PROCESSING"),
+    [parser, ...analyses, ...analyses.flatMap((a) => a.graphs ?? [])].some(
+      (s) => s.status === "QUEUED" || s.status === "PROCESSING",
+    ),
+  );
+}
+
+function hasFinishedGraph(batch: BatchDetail): boolean {
+  return batch.pipeline.some(({ analyses }) =>
+    analyses.some((a) => a.graphs?.some((g) => g.status === "FINISHED")),
+  );
+}
+
+// Each bracket item draws its own slice of the bracket, so the trunk runs
+// from the first item to the last, not past them.
+const BRACKET_ITEM =
+  "relative py-1 pl-4 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-px before:bg-zinc-300 first:before:top-1/2 last:before:bottom-1/2 after:absolute after:left-0 after:top-1/2 after:h-px after:w-4 after:bg-zinc-300 dark:before:bg-zinc-700 dark:after:bg-zinc-700";
+
+function Connector() {
+  return <span aria-hidden="true" className="h-px w-4 shrink-0 bg-zinc-300 dark:bg-zinc-700" />;
+}
+
+/** Graphs aren't tables, so unlike other nodes this one isn't a link. */
+function GraphNode({ graph }: { graph: PipelineGraph }) {
+  const { label, dot } = STEP_STATUS[graph.status];
+  return (
+    <span
+      title={label}
+      className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 font-mono text-xs border-zinc-200 bg-white text-zinc-500 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-400"
+    >
+      <span aria-hidden="true" className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
+      <BarChart3 size={12} aria-hidden="true" className="shrink-0 text-zinc-400 dark:text-zinc-500" />
+      {graph.name}
+      <span className="sr-only"> ({label})</span>
+    </span>
   );
 }
 
@@ -740,16 +814,25 @@ function BatchPipeline({ batch }: { batch: BatchDetail }) {
             <PipelineNode step={parser} batch={batch} />
             {analyses.length > 0 && (
               <>
-                <span aria-hidden="true" className="h-px w-4 bg-zinc-300 dark:bg-zinc-700" />
-                {/* Each item draws its own slice of the bracket so the trunk
-                    runs from the first analysis to the last, not past them. */}
+                <Connector />
                 <ul className="flex flex-col">
                   {analyses.map((analysis) => (
-                    <li
-                      key={analysis.name}
-                      className="relative py-1 pl-4 before:absolute before:bottom-0 before:left-0 before:top-0 before:w-px before:bg-zinc-300 first:before:top-1/2 last:before:bottom-1/2 after:absolute after:left-0 after:top-1/2 after:h-px after:w-4 after:bg-zinc-300 dark:before:bg-zinc-700 dark:after:bg-zinc-700"
-                    >
-                      <PipelineNode step={analysis} batch={batch} />
+                    <li key={analysis.name} className={BRACKET_ITEM}>
+                      <div className="flex items-center">
+                        <PipelineNode step={analysis} batch={batch} />
+                        {!!analysis.graphs?.length && (
+                          <>
+                            <Connector />
+                            <ul className="flex flex-col">
+                              {analysis.graphs.map((graph) => (
+                                <li key={graph.name} className={BRACKET_ITEM}>
+                                  <GraphNode graph={graph} />
+                                </li>
+                              ))}
+                            </ul>
+                          </>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -782,15 +865,10 @@ function isSubmitKey(e: KeyboardEvent): boolean {
 }
 
 function useNoteMutation<T = void>(batchId: string, fn: (arg: T) => Promise<unknown>, onDone?: () => void) {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  return useMutation({
-    mutationFn: fn,
-    onSuccess: () => {
-      onDone?.();
-      void queryClient.invalidateQueries({ queryKey: ["batch-notes", batchId] });
-    },
-    onError: (err) => toast(err instanceof Error ? err.message : "Couldn't save the note", "error"),
+  return useRefreshingMutation(fn, {
+    invalidate: [["batch-notes", batchId]],
+    errorMessage: "Couldn't save the note",
+    onDone,
   });
 }
 
@@ -1024,7 +1102,7 @@ function BatchPanel({
     >
       {isLoading && (
         <div className="flex flex-wrap gap-4">
-          <div className="h-24 w-full animate-pulse rounded-lg bg-zinc-200 sm:w-40 dark:bg-zinc-800" />
+          <div className="h-24 w-full animate-pulse rounded-lg bg-zinc-200 sm:w-44 dark:bg-zinc-800" />
           <div className="h-64 flex-[1_1_18rem] animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-800" />
           <div className="h-64 flex-[1.4_1_22rem] animate-pulse rounded-lg bg-zinc-200 dark:bg-zinc-800" />
         </div>

@@ -1,6 +1,7 @@
-import { apiDelete, apiGet, apiPatch, apiPost } from "./api";
+import { apiDelete, apiGet, apiPatch, apiPost, BASE_URL } from "./api";
 import {
   mockAddBatchNote,
+  mockBatchGraphsUrl,
   mockCancelBatch,
   mockDeleteBatch,
   mockDeleteBatchNote,
@@ -58,7 +59,12 @@ export interface PipelineStep {
   table?: string;
   /** Column that selects this batch's rows in `table`; defaults to run_id */
   filter_by?: "run_id" | "batch_id";
+  /** Graphs generated once this step finishes (analyses only) */
+  graphs?: PipelineGraph[];
 }
+
+/** A graph generated from an analysis's output. It isn't a table, so it isn't linked. */
+export type PipelineGraph = Pick<PipelineStep, "name" | "status">;
 
 /** One parser fed by the batch's files, and the analyses fed by that parser's output. */
 export interface PipelineBranch {
@@ -73,7 +79,6 @@ export interface BatchDetail extends BatchSummary {
   source: string | null;
   parser: string | null;
   rows_written: number | null;
-  tables: string[];
   files: BatchFile[];
   /** The pipeline submitted with this batch */
   pipeline: PipelineBranch[];
@@ -187,6 +192,12 @@ export async function cancelBatch(batchId: string): Promise<void> {
 export async function retryFailedFiles(batchId: string): Promise<void> {
   if (USE_MOCK) return mockRetryFailedFiles(batchId);
   return apiPost(`/batches/${encodeURIComponent(batchId)}/retry`, {});
+}
+
+/** URL that downloads every graph generated for the batch, as one archive. */
+export function batchGraphsUrl(batchId: string): string {
+  if (USE_MOCK) return mockBatchGraphsUrl(batchId);
+  return `${BASE_URL}/batches/${encodeURIComponent(batchId)}/graphs`;
 }
 
 export async function updateBatchTitle(batchId: string, title: string | null): Promise<void> {
