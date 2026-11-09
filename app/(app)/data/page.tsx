@@ -7,7 +7,7 @@ import {
   lazy,
   Suspense,
 } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   Table2,
@@ -423,8 +423,8 @@ export default function DataPage() {
   }, []);
 
   // ── Query handlers ──────────────────────────────────
-  const handleExecute = useCallback(async () => {
-    const query = editorRef.current?.getValue() ?? sql;
+  const handleExecute = useCallback(async (override?: string) => {
+    const query = override ?? editorRef.current?.getValue() ?? sql;
     const trimmed = query.trim();
     if (!trimmed) return;
 
@@ -468,6 +468,33 @@ export default function DataPage() {
       setIsRunning(false);
     }
   }, [sql, addEntry, toast, activeQueryId, updateQuery]);
+
+  // Other pages link here with ?sql=… (e.g. a batch's rows): load it into the
+  // editor, run it once, then drop the param so the URL doesn't go stale.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const incomingSql = searchParams.get("sql");
+  const consumedSqlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!incomingSql) {
+      consumedSqlRef.current = null; // so the same link works again next time
+      return;
+    }
+    if (consumedSqlRef.current === incomingSql) return;
+    consumedSqlRef.current = incomingSql;
+    setSql(incomingSql);
+    setActiveQueryId(null);
+    setShowEditor(true);
+    void handleExecute(incomingSql);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("sql");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [incomingSql, handleExecute, setSearchParams]);
 
   const handleHistoryClick = useCallback((entry: QueryHistoryEntry) => {
     setSql(entry.sql);

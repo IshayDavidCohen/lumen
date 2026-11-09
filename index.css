@@ -123,10 +123,10 @@ html.dark body {
   }
 }
 
-[data-state="open"][data-swipe-direction="right"] {
+.toast-item[data-state="open"] {
   animation: slide-in-right 200ms ease-out;
 }
 
-[data-state="closed"] {
+.toast-item[data-state="closed"] {
   animation: slide-out-right 200ms ease-in;
 }
