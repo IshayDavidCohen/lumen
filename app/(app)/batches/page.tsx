@@ -4,6 +4,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, RefreshCw, Search, Trash2, Upload } from "lucide-react";
 import {
+  batchRowsSql,
+  dataQueryPath,
   deleteBatch,
   getBatch,
   listBatches,
@@ -380,7 +382,8 @@ function BatchDetails({ batch }: { batch: BatchDetail }) {
               {batch.tables.map((table) => (
                 <Link
                   key={table}
-                  to={`/data/${batch.ingest_type}/${table}`}
+                  to={dataQueryPath(batch.ingest_type, table, batchRowsSql(table, batch.batch_id))}
+                  title={`Rows from ${batch.batch_id}`}
                   className="text-blue-600 hover:underline dark:text-blue-400"
                 >
                   {table}
@@ -398,12 +401,16 @@ function BatchDetails({ batch }: { batch: BatchDetail }) {
 
 function FileRow({
   file,
+  batchId,
   ingestType,
+  tables,
   isOpen,
   onToggle,
 }: {
   file: BatchFile;
+  batchId: string;
   ingestType: string;
+  tables: string[];
   isOpen: boolean;
   onToggle: () => void;
 }) {
@@ -441,14 +448,7 @@ function FileRow({
         <div className="flex flex-col gap-2 bg-zinc-50 py-2 pl-11 pr-4 text-xs dark:bg-zinc-800/40">
           <dl className="flex flex-col">
             <DetailRow label="Job ID" mono>{file.job_id}</DetailRow>
-            <DetailRow label="Iteration">
-              {file.iteration}
-              {file.iteration > 1 && (
-                <span className="text-zinc-500 dark:text-zinc-400">
-                  {" "}· retried {file.iteration - 1}×
-                </span>
-              )}
-            </DetailRow>
+            <DetailRow label="Iteration">{file.iteration}</DetailRow>
             {file.status === "PROCESSING" && file.progress !== null && (
               <DetailRow label="Progress">{file.progress}%</DetailRow>
             )}
@@ -465,13 +465,21 @@ function FileRow({
               {file.error}
             </p>
           )}
-          {file.status === "PARSED" && (
-            <Link
-              to={`/data/${ingestType}`}
-              className="self-start font-medium text-blue-600 hover:underline dark:text-blue-400"
-            >
-              Open in Data
-            </Link>
+          {file.status === "PARSED" && tables.length > 0 && (
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="text-zinc-500 dark:text-zinc-400">
+                Open iteration {file.iteration} in
+              </span>
+              {tables.map((table) => (
+                <Link
+                  key={table}
+                  to={dataQueryPath(ingestType, table, batchRowsSql(table, batchId, file.iteration))}
+                  className="font-mono font-medium text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  {table}
+                </Link>
+              ))}
+            </p>
           )}
         </div>
       )}
@@ -512,7 +520,9 @@ function BatchFiles({ batch }: { batch: BatchDetail }) {
           <FileRow
             key={file.job_id}
             file={file}
+            batchId={batch.batch_id}
             ingestType={batch.ingest_type}
+            tables={batch.tables}
             isOpen={expanded.has(file.job_id)}
             onToggle={() => toggle(file.job_id)}
           />

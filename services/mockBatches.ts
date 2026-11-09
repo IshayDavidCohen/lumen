@@ -30,9 +30,12 @@ function pad(n: number, width = 2): string {
 
 // ── Seed data ─────────────────────────────────────────────────
 
+/** Mock batches group files into iterations of this size: 0,0,1,1,2,2,… */
+const FILES_PER_ITERATION = 2;
+
 interface SeedFile {
   filename: string;
-  /** Which attempt at parsing this file the status belongs to (1 = first try) */
+  /** Zero-based iteration this file belongs to */
   iteration: number;
   error?: string;
   status: UploadStatus;
@@ -53,7 +56,7 @@ interface SeedBatch {
   files: SeedFile[];
 }
 
-/** `count` first-attempt files that all share one status (and error, if any). */
+/** The first `count` files of a batch, all sharing one status (and error, if any). */
 function sameFiles(
   count: number,
   name: (n: number) => string,
@@ -62,7 +65,7 @@ function sameFiles(
 ): SeedFile[] {
   return Array.from({ length: count }, (_, i) => ({
     filename: name(i + 1),
-    iteration: 1,
+    iteration: Math.floor(i / FILES_PER_ITERATION),
     status,
     ...(error !== undefined && { error }),
   }));
@@ -93,9 +96,9 @@ const SEEDS: SeedBatch[] = [
     baseBytes: 140 * MB,
     files: [
       ...sameFiles(12, (n) => `dc-east-${pad(n)}.pcap`),
-      { filename: "dc-east-13.pcap", iteration: 2, status: "PROCESSING" },
-      { filename: "dc-east-14.pcap", iteration: 1, status: "PROCESSING" },
-      { filename: "dc-east-15.pcap", iteration: 1, status: "QUEUED" },
+      { filename: "dc-east-13.pcap", iteration: 6, status: "PROCESSING" },
+      { filename: "dc-east-14.pcap", iteration: 6, status: "PROCESSING" },
+      { filename: "dc-east-15.pcap", iteration: 7, status: "QUEUED" },
     ],
   },
   {
@@ -110,29 +113,29 @@ const SEEDS: SeedBatch[] = [
     tables: ["packets", "connections", "dns_queries", "http_requests"],
     baseBytes: 160 * MB,
     files: [
-      { filename: "edge-01.pcap", iteration: 1, status: "PARSED" },
-      { filename: "edge-02.pcap", iteration: 1, status: "PARSED" },
+      { filename: "edge-01.pcap", iteration: 0, status: "PARSED" },
+      { filename: "edge-02.pcap", iteration: 0, status: "PARSED" },
       {
         filename: "edge-03.pcap",
-        iteration: 3,
+        iteration: 1,
         status: "FAILED",
         error: "Truncated packet at offset 0x3F2A10. The capture ends mid-frame.",
       },
       { filename: "edge-04.pcap", iteration: 1, status: "PARSED" },
       { filename: "edge-05.pcap", iteration: 2, status: "PARSED" },
-      { filename: "edge-06.pcap", iteration: 1, status: "PARSED" },
-      { filename: "edge-07.pcap", iteration: 1, status: "PARSED" },
-      { filename: "edge-08.pcap", iteration: 1, status: "PARSED" },
+      { filename: "edge-06.pcap", iteration: 2, status: "PARSED" },
+      { filename: "edge-07.pcap", iteration: 3, status: "PARSED" },
+      { filename: "edge-08.pcap", iteration: 3, status: "PARSED" },
       {
         filename: "edge-09.pcap",
-        iteration: 1,
+        iteration: 4,
         status: "FAILED",
         error: "Unsupported link-layer type (DLT 228).",
       },
-      { filename: "edge-10.pcap", iteration: 1, status: "PARSED" },
-      { filename: "edge-11.pcap", iteration: 1, status: "PARSED" },
-      { filename: "edge-12.pcap", iteration: 1, status: "PARSED" },
-      { filename: "edge-13.pcap", iteration: 1, status: "PARSED" },
+      { filename: "edge-10.pcap", iteration: 4, status: "PARSED" },
+      { filename: "edge-11.pcap", iteration: 5, status: "PARSED" },
+      { filename: "edge-12.pcap", iteration: 5, status: "PARSED" },
+      { filename: "edge-13.pcap", iteration: 6, status: "PARSED" },
     ],
   },
   {
@@ -191,20 +194,20 @@ const SEEDS: SeedBatch[] = [
     tables: ["packets", "connections"],
     baseBytes: 95 * MB,
     files: [
-      { filename: "branch-01.pcap", iteration: 1, status: "PARSED" },
-      { filename: "branch-02.pcap", iteration: 1, status: "PARSED" },
+      { filename: "branch-01.pcap", iteration: 0, status: "PARSED" },
+      { filename: "branch-02.pcap", iteration: 0, status: "PARSED" },
       { filename: "branch-03.pcap", iteration: 1, status: "PARSED" },
       { filename: "branch-04.pcap", iteration: 1, status: "PARSED" },
-      { filename: "branch-05.pcap", iteration: 1, status: "PARSED" },
+      { filename: "branch-05.pcap", iteration: 2, status: "PARSED" },
       {
         filename: "branch-06.pcap",
         iteration: 2,
         status: "FAILED",
         error: "Corrupt frame at offset 0x1A0044.",
       },
-      { filename: "branch-07.pcap", iteration: 1, status: "PARSED" },
-      { filename: "branch-08.pcap", iteration: 1, status: "PARSED" },
-      { filename: "branch-09.pcap", iteration: 1, status: "PARSED" },
+      { filename: "branch-07.pcap", iteration: 3, status: "PARSED" },
+      { filename: "branch-08.pcap", iteration: 3, status: "PARSED" },
+      { filename: "branch-09.pcap", iteration: 4, status: "PARSED" },
     ],
   },
   {
@@ -274,12 +277,12 @@ const SEEDS: SeedBatch[] = [
       ...sameFiles(7, (n) => `flows_${pad(n, 4)}.parquet`),
       {
         filename: "flows_0008.parquet",
-        iteration: 1,
+        iteration: 3,
         status: "FAILED",
         error: "Unexpected EOF reading flow record.",
       },
-      { filename: "flows_0009.parquet", iteration: 1, status: "PARSED" },
-      { filename: "flows_0010.parquet", iteration: 1, status: "PARSED" },
+      { filename: "flows_0009.parquet", iteration: 4, status: "PARSED" },
+      { filename: "flows_0010.parquet", iteration: 4, status: "PARSED" },
     ],
   },
   {
@@ -323,14 +326,14 @@ const SEEDS: SeedBatch[] = [
       ...sameFiles(6, (n) => `peering-${pad(n, 4)}.parquet`),
       {
         filename: "peering-0007.parquet",
-        iteration: 2,
+        iteration: 3,
         status: "FAILED",
         error: "Checksum mismatch on row group 3.",
       },
-      { filename: "peering-0008.parquet", iteration: 1, status: "PARSED" },
-      { filename: "peering-0009.parquet", iteration: 1, status: "PARSED" },
-      { filename: "peering-0010.parquet", iteration: 1, status: "PARSED" },
-      { filename: "peering-0011.parquet", iteration: 1, status: "PARSED" },
+      { filename: "peering-0008.parquet", iteration: 3, status: "PARSED" },
+      { filename: "peering-0009.parquet", iteration: 4, status: "PARSED" },
+      { filename: "peering-0010.parquet", iteration: 4, status: "PARSED" },
+      { filename: "peering-0011.parquet", iteration: 5, status: "PARSED" },
     ],
   },
   {
@@ -389,8 +392,8 @@ const SEEDS: SeedBatch[] = [
     tables: ["packets", "connections"],
     baseBytes: 175 * MB,
     files: [
-      { filename: "vpn-gw-01.pcap", iteration: 1, status: "PARSED" },
-      { filename: "vpn-gw-02.pcap", iteration: 1, status: "PARSED" },
+      { filename: "vpn-gw-01.pcap", iteration: 0, status: "PARSED" },
+      { filename: "vpn-gw-02.pcap", iteration: 0, status: "PARSED" },
       { filename: "vpn-gw-03.pcap", iteration: 1, status: "PARSED" },
       {
         filename: "vpn-gw-04.pcap",
@@ -398,19 +401,19 @@ const SEEDS: SeedBatch[] = [
         status: "FAILED",
         error: "Truncated packet at offset 0x8B1200.",
       },
-      { filename: "vpn-gw-05.pcap", iteration: 1, status: "PARSED" },
+      { filename: "vpn-gw-05.pcap", iteration: 2, status: "PARSED" },
       { filename: "vpn-gw-06.pcap", iteration: 2, status: "PARSED" },
-      { filename: "vpn-gw-07.pcap", iteration: 1, status: "PARSED" },
-      { filename: "vpn-gw-08.pcap", iteration: 1, status: "PARSED" },
-      { filename: "vpn-gw-09.pcap", iteration: 1, status: "PARSED" },
+      { filename: "vpn-gw-07.pcap", iteration: 3, status: "PARSED" },
+      { filename: "vpn-gw-08.pcap", iteration: 3, status: "PARSED" },
+      { filename: "vpn-gw-09.pcap", iteration: 4, status: "PARSED" },
       {
         filename: "vpn-gw-10.pcap",
-        iteration: 3,
+        iteration: 4,
         status: "FAILED",
         error: "Unsupported encapsulation type 0xFE.",
       },
-      { filename: "vpn-gw-11.pcap", iteration: 1, status: "PARSED" },
-      { filename: "vpn-gw-12.pcap", iteration: 1, status: "PARSED" },
+      { filename: "vpn-gw-11.pcap", iteration: 5, status: "PARSED" },
+      { filename: "vpn-gw-12.pcap", iteration: 5, status: "PARSED" },
     ],
   },
   {

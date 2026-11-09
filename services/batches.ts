@@ -25,7 +25,7 @@ export interface BatchSummary {
 export interface BatchFile {
   job_id: string;
   filename: string;
-  /** Parse attempt this status belongs to; 1 is the first try, higher means retried */
+  /** Zero-based iteration within the batch; a batch is a sequence of iterations, each a set of files */
   iteration: number;
   size_bytes: number;
   status: UploadStatus;
@@ -49,6 +49,24 @@ export interface BatchDetail extends BatchSummary {
 export interface BatchListResponse {
   batches: BatchSummary[];
   total: number;
+}
+
+// ── Data links ────────────────────────────────────────────────
+
+function sqlString(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+/** SQL selecting a table's rows from one batch, optionally narrowed to one iteration. */
+export function batchRowsSql(table: string, batchId: string, iteration?: number): string {
+  const where = [`batch_id = ${sqlString(batchId)}`];
+  if (iteration !== undefined) where.push(`iteration = ${iteration}`);
+  return `SELECT * FROM ${table} WHERE ${where.join(" AND ")};`;
+}
+
+/** Data page URL that opens `table` and runs `sql` against it on arrival. */
+export function dataQueryPath(ingestType: string, table: string, sql: string): string {
+  return `/data/${ingestType}/${table}?${new URLSearchParams({ sql })}`;
 }
 
 // ── Service API ───────────────────────────────────────────────
