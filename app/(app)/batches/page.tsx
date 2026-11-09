@@ -988,6 +988,17 @@ export default function BatchesPage() {
       { replace: true },
     );
 
+  // A linked batch (?open=<id>) that isn't on the current page is pinned above
+  // the list instead. Shares the ["batch", id] cache with its expanded panel.
+  const openOnPage = rows.some((r) => r.batch.batch_id === openId);
+  const showLinked = !!openId && !!data && !openOnPage;
+  const linked = useQuery({
+    queryKey: ["batch", openId],
+    queryFn: ({ signal }) => getBatch(openId!, signal),
+    enabled: showLinked,
+    retry: false,
+  });
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
@@ -1049,6 +1060,33 @@ export default function BatchesPage() {
           />
         </div>
       </div>
+
+      {showLinked && (
+        <div className="mb-4 overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50">
+          <p className="border-b px-5 py-2 text-xs font-medium border-zinc-100 bg-zinc-50 text-zinc-500 dark:border-zinc-800/60 dark:bg-zinc-900 dark:text-zinc-400">
+            Linked batch · not on this page
+          </p>
+          {linked.isLoading && (
+            <div className="h-12 animate-pulse bg-zinc-100 dark:bg-zinc-800/40" />
+          )}
+          {linked.isError && (
+            <p className="px-5 py-4 text-sm text-zinc-500 dark:text-zinc-400">
+              Couldn&apos;t load {openId}. It may have been deleted.
+            </p>
+          )}
+          {linked.data && (
+            <ul>
+              <BatchRow
+                batch={linked.data}
+                status={getBatchStatus(linked.data)}
+                isOpen
+                onToggle={() => setOpenBatch(null)}
+                onDeleted={() => setOpenBatch(null)}
+              />
+            </ul>
+          )}
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900/50">
         <div
